@@ -21,7 +21,7 @@
 
 1. **Clone this repository**  
    ```bash
-   git clone https://github.com/yourusername/stockgpt.git
+   git clone
    cd stockgpt
 
 
