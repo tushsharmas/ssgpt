@@ -559,14 +559,32 @@ def main():
         if st.expander("📰 Recent News", expanded=False):
             news = stock.news
             if news:
-                for i, item in enumerate(news[:5]):
-                    st.markdown(f"**{item.get('title', 'No title')}**")
-                    if 'providerPublishTime' in item:
-                        publish_time = datetime.fromtimestamp(item['providerPublishTime'])
-                        st.caption(f"📅 {publish_time.strftime('%Y-%m-%d %H:%M')} | 🏢 {item.get('publisher', 'Unknown')}")
-                    if 'link' in item:
-                        st.markdown(f"[Read more]({item['link']})")
-                    st.divider()
+                valid_news_count = 0
+                for item in news:
+                    # Only show news items with valid titles
+                    title = item.get('title', '').strip()
+                    if title and title != 'No title' and valid_news_count < 5:
+                        st.markdown(f"**{title}**")
+                        
+                        # Add publication info if available
+                        if 'providerPublishTime' in item:
+                            try:
+                                publish_time = datetime.fromtimestamp(item['providerPublishTime'])
+                                publisher = item.get('publisher', 'Unknown')
+                                st.caption(f"📅 {publish_time.strftime('%Y-%m-%d %H:%M')} | 🏢 {publisher}")
+                            except (ValueError, OSError):
+                                # Handle invalid timestamp
+                                st.caption(f"🏢 {item.get('publisher', 'Unknown')}")
+                        
+                        # Add link if available
+                        if 'link' in item and item['link']:
+                            st.markdown(f"[Read more]({item['link']})")
+                        
+                        st.divider()
+                        valid_news_count += 1
+                
+                if valid_news_count == 0:
+                    st.info("No recent news with valid titles available")
             else:
                 st.info("No recent news available")
         
