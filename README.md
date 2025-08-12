@@ -25,9 +25,9 @@ An **interactive, all-in-one stock market dashboard** powered by
 
 <table>
   <tr>
-    <td><img src="assets/screenshot1.png" width="350" alt="Candlestick Chart"></td>
-    <td><img src="assets/screenshot2.png" width="350" alt="Technical Indicators"></td>
-    <td><img src="assets/screenshot3.png" width="350" alt="Volume Analysis"></td>
+    <td><img src="https://github.com/Srinivas26k/ssgpt/blob/docs/update-readme/assets/dashboard.png" width="350" alt="Candlestick Chart"></td>
+    <td><img src="https://github.com/Srinivas26k/ssgpt/blob/docs/update-readme/assets/technical_indicators.png" width="350" alt="Technical Indicators"></td>
+    <td><img src="https://github.com/Srinivas26k/ssgpt/blob/docs/update-readme/assets/volume_analysis.png" width="350" alt="Volume Analysis"></td>
   </tr>
   <tr>
     <td align="center">Candlestick & Price Chart</td>
