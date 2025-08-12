@@ -47,7 +47,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_resource(ttl=300)  # Cache for 5 minutes
 def get_stock_info(ticker):
     """Get comprehensive stock information"""
     try:
