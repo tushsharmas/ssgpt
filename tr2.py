@@ -7,9 +7,6 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import time
 import numpy as np
-import asyncio
-import threading
-from concurrent.futures import ThreadPoolExecutor
 
 # Configure page
 st.set_page_config(
@@ -287,9 +284,18 @@ def create_volume_analysis_chart(data):
     if data.empty:
         return go.Figure()
     
+    # Create a copy to avoid modifying the original data
+    volume_data = data.copy()
+    
     # Calculate volume indicators
-    data['Volume_SMA'] = data['Volume'].rolling(window=20).mean()
-    data['Volume_Ratio'] = data['Volume'] / data['Volume_SMA']
+    volume_data['Volume_SMA'] = volume_data['Volume'].rolling(window=20).mean()
+    
+    # Avoid division by zero
+    volume_data['Volume_Ratio'] = np.where(
+        volume_data['Volume_SMA'] > 0,
+        volume_data['Volume'] / volume_data['Volume_SMA'],
+        0
+    )
     
     fig = make_subplots(
         rows=2, cols=1,
@@ -301,22 +307,22 @@ def create_volume_analysis_chart(data):
     
     # Volume bars
     colors = ['red' if close < open else 'green' 
-              for close, open in zip(data['Close'], data['Open'])]
+              for close, open in zip(volume_data['Close'], volume_data['Open'])]
     
     fig.add_trace(
-        go.Bar(x=data.index, y=data['Volume'], name='Volume', marker_color=colors, opacity=0.7),
+        go.Bar(x=volume_data.index, y=volume_data['Volume'], name='Volume', marker_color=colors, opacity=0.7),
         row=1, col=1
     )
     
     fig.add_trace(
-        go.Scatter(x=data.index, y=data['Volume_SMA'], name='Volume SMA(20)', 
+        go.Scatter(x=volume_data.index, y=volume_data['Volume_SMA'], name='Volume SMA(20)', 
                   line=dict(color='blue', width=2)),
         row=1, col=1
     )
     
     # Volume ratio
     fig.add_trace(
-        go.Scatter(x=data.index, y=data['Volume_Ratio'], name='Volume Ratio', 
+        go.Scatter(x=volume_data.index, y=volume_data['Volume_Ratio'], name='Volume Ratio', 
                   line=dict(color='purple')),
         row=2, col=1
     )
@@ -387,10 +393,24 @@ def display_real_time_metrics(stock_info, current_data):
     with col4:
         market_cap = stock_info.info.get('marketCap', 0)
         pe_ratio = stock_info.info.get('trailingPE', 'N/A')
+        
+        # Format market cap safely
+        if isinstance(market_cap, (int, float)) and market_cap > 0:
+            if market_cap >= 1e12:
+                market_cap_str = f"${market_cap/1e12:.1f}T"
+            elif market_cap >= 1e9:
+                market_cap_str = f"${market_cap/1e9:.1f}B"
+            elif market_cap >= 1e6:
+                market_cap_str = f"${market_cap/1e6:.1f}M"
+            else:
+                market_cap_str = f"${market_cap:,.0f}"
+        else:
+            market_cap_str = "N/A"
+            
         st.markdown(f"""
         <div class="metric-container">
             <h3>Key Metrics</h3>
-            <p><strong>Market Cap:</strong> ${market_cap/1e9:.1f}B</p>
+            <p><strong>Market Cap:</strong> {market_cap_str}</p>
             <p><strong>P/E:</strong> {pe_ratio}</p>
             <p><strong>Updated:</strong> {datetime.now().strftime('%H:%M:%S')}</p>
         </div>
@@ -408,8 +428,14 @@ def main():
         ticker = st.text_input(
             "📊 Stock Ticker", 
             value="AAPL", 
-            help="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)"
-        ).upper()
+            help="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)",
+            max_chars=10
+        ).upper().strip()
+        
+        # Validate ticker format
+        if ticker and not ticker.replace('-', '').replace('.', '').isalnum():
+            st.warning("⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)")
+            ticker = ""
         
         # Time period selection
         period_options = {
@@ -425,20 +451,27 @@ def main():
         period = period_options[selected_period]
         
         # Auto-refresh toggle
-        auto_refresh = st.checkbox("🔄 Auto Refresh (30s)", value=True)
+        auto_refresh = st.checkbox("🔄 Auto Refresh (30s)", value=False)
         
         # Refresh button
         if st.button("🔄 Refresh Now"):
             st.cache_data.clear()
+            st.cache_resource.clear()
     
     if not ticker:
         st.warning("Please enter a stock ticker symbol")
         return
     
-    # Auto-refresh logic
+    # Auto-refresh implementation using session state
     if auto_refresh:
-        placeholder = st.empty()
-        time.sleep(1)  # Small delay for smooth updates
+        if 'last_refresh' not in st.session_state:
+            st.session_state.last_refresh = time.time()
+        
+        current_time = time.time()
+        if current_time - st.session_state.last_refresh >= 30:
+            st.session_state.last_refresh = current_time
+            st.cache_data.clear()
+            st.rerun()
     
     try:
         # Get stock information
@@ -504,24 +537,33 @@ def main():
             st.plotly_chart(tech_chart, use_container_width=True)
             
             # Technical analysis summary
-            if 'RSI' in historical_data.columns:
+            if 'RSI' in historical_data.columns and not historical_data['RSI'].empty:
                 latest_rsi = historical_data['RSI'].iloc[-1]
                 latest_macd = historical_data['MACD'].iloc[-1]
                 latest_signal = historical_data['MACD_Signal'].iloc[-1]
                 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    rsi_signal = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
-                    st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
+                    if not pd.isna(latest_rsi):
+                        rsi_signal = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
+                        st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
+                    else:
+                        st.metric("RSI (14)", "N/A", "Insufficient data")
                 
                 with col2:
-                    macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
-                    st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
+                    if not pd.isna(latest_macd) and not pd.isna(latest_signal):
+                        macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
+                        st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
+                    else:
+                        st.metric("MACD Signal", "N/A", "Insufficient data")
                 
                 with col3:
-                    if 'ATR' in historical_data.columns:
+                    if 'ATR' in historical_data.columns and not historical_data['ATR'].empty:
                         latest_atr = historical_data['ATR'].iloc[-1]
-                        st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
+                        if not pd.isna(latest_atr):
+                            st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
+                        else:
+                            st.metric("ATR (14)", "N/A", "Insufficient data")
         
         with chart_tabs[2]:
             st.subheader("Volume Analysis")
@@ -605,11 +647,13 @@ def main():
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         st.info("Please check the ticker symbol and try again.")
-    
-    # Auto-refresh implementation
-    if auto_refresh:
-        time.sleep(30)  # Wait 30 seconds before next refresh
-        st.rerun()
+        
+        # Show helpful suggestions for common errors
+        if "No data found" in str(e) or "Invalid ticker" in str(e):
+            st.info("💡 **Tips:**")
+            st.info("• Make sure the ticker symbol is correct (e.g., AAPL, GOOGL, TSLA)")
+            st.info("• Some stocks may not have real-time data available")
+            st.info("• Try a major stock exchange symbol")
 
 if __name__ == "__main__":
     main()
