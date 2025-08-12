@@ -3,269 +3,657 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
+import time
+import numpy as np
 
+# Configure page
+st.set_page_config(
+    page_title="Advanced Real-Time Stock Analyzer",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS for better UI
+st.markdown("""
+<style>
+    .metric-container {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+    }
+    .positive { color: #00C851; }
+    .negative { color: #ff4444; }
+    .neutral { color: #33b5e5; }
+    .real-time-indicator {
+        background-color: #4CAF50;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.8rem;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+@st.cache_resource(ttl=300)  # Cache for 5 minutes
 def get_stock_info(ticker):
-    stock = yf.Ticker(ticker)
-    return stock
+    """Get comprehensive stock information"""
+    try:
+        stock = yf.Ticker(ticker)
+        return stock
+    except Exception as e:
+        st.error(f"Error fetching stock data: {e}")
+        return None
 
-def plot_price_chart(data):
-    fig = go.Figure(data=[go.Candlestick(x=data.index,
-                                         open=data['Open'],
-                                         high=data['High'],
-                                         low=data['Low'],
-                                         close=data['Close'])])
-    fig.update_layout(title="Stock Price Chart", xaxis_title="Date", yaxis_title="Price")
-    return fig
+@st.cache_data(ttl=60)  # Cache for 1 minute for real-time feel
+def get_real_time_data(ticker):
+    """Get real-time stock data"""
+    try:
+        stock = yf.Ticker(ticker)
+        # Get intraday data for real-time feel
+        data = stock.history(period="1d", interval="1m")
+        return data
+    except Exception as e:
+        st.error(f"Error fetching real-time data: {e}")
+        return pd.DataFrame()
 
-def plot_volume_chart(data):
-    fig = px.bar(data, x=data.index, y='Volume', title='Trading Volume')
-    return fig
-
-def calculate_moving_averages(data):
-    data['MA50'] = data['Close'].rolling(window=50).mean()
-    data['MA200'] = data['Close'].rolling(window=200).mean()
+def calculate_technical_indicators(data):
+    """Calculate comprehensive technical indicators"""
+    if data.empty:
+        return data
+    
+    # Simple Moving Averages
+    data['SMA_20'] = data['Close'].rolling(window=20).mean()
+    data['SMA_50'] = data['Close'].rolling(window=50).mean()
+    data['SMA_200'] = data['Close'].rolling(window=200).mean()
+    
+    # Exponential Moving Averages
+    data['EMA_12'] = data['Close'].ewm(span=12).mean()
+    data['EMA_26'] = data['Close'].ewm(span=26).mean()
+    data['EMA_50'] = data['Close'].ewm(span=50).mean()
+    
+    # RSI
+    delta = data['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    data['RSI'] = 100 - (100 / (1 + rs))
+    
+    # MACD
+    data['MACD'] = data['EMA_12'] - data['EMA_26']
+    data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
+    data['MACD_Histogram'] = data['MACD'] - data['MACD_Signal']
+    
+    # Bollinger Bands
+    data['BB_Middle'] = data['Close'].rolling(window=20).mean()
+    bb_std = data['Close'].rolling(window=20).std()
+    data['BB_Upper'] = data['BB_Middle'] + (bb_std * 2)
+    data['BB_Lower'] = data['BB_Middle'] - (bb_std * 2)
+    
+    # Stochastic Oscillator
+    low_14 = data['Low'].rolling(window=14).min()
+    high_14 = data['High'].rolling(window=14).max()
+    data['%K'] = 100 * ((data['Close'] - low_14) / (high_14 - low_14))
+    data['%D'] = data['%K'].rolling(window=3).mean()
+    
+    # Average True Range (ATR)
+    data['H-L'] = data['High'] - data['Low']
+    data['H-PC'] = abs(data['High'] - data['Close'].shift(1))
+    data['L-PC'] = abs(data['Low'] - data['Close'].shift(1))
+    data['TR'] = data[['H-L', 'H-PC', 'L-PC']].max(axis=1)
+    data['ATR'] = data['TR'].rolling(window=14).mean()
+    
     return data
 
-def plot_moving_averages(data):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close'))
-    fig.add_trace(go.Scatter(x=data.index, y=data['MA50'], mode='lines', name='50-day MA'))
-    fig.add_trace(go.Scatter(x=data.index, y=data['MA200'], mode='lines', name='200-day MA'))
-    fig.update_layout(title="Price with Moving Averages", xaxis_title="Date", yaxis_title="Price")
+def create_advanced_candlestick_chart(data, title="Stock Price"):
+    """Create advanced candlestick chart with volume"""
+    if data.empty:
+        return go.Figure()
+    
+    # Create subplots
+    fig = make_subplots(
+        rows=2, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=(title, 'Volume'),
+        row_heights=[0.7, 0.3]
+    )
+    
+    # Candlestick chart
+    fig.add_trace(
+        go.Candlestick(
+            x=data.index,
+            open=data['Open'],
+            high=data['High'],
+            low=data['Low'],
+            close=data['Close'],
+            name="OHLC",
+            increasing_line_color='#00C851',
+            decreasing_line_color='#ff4444'
+        ),
+        row=1, col=1
+    )
+    
+    # Add moving averages if available
+    if 'SMA_20' in data.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=data['SMA_20'],
+                mode='lines',
+                name='SMA 20',
+                line=dict(color='orange', width=1)
+            ),
+            row=1, col=1
+        )
+    
+    if 'SMA_50' in data.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=data.index,
+                y=data['SMA_50'],
+                mode='lines',
+                name='SMA 50',
+                line=dict(color='blue', width=1)
+            ),
+            row=1, col=1
+        )
+    
+    # Volume chart
+    colors = ['red' if close < open else 'green' 
+              for close, open in zip(data['Close'], data['Open'])]
+    
+    fig.add_trace(
+        go.Bar(
+            x=data.index,
+            y=data['Volume'],
+            name='Volume',
+            marker_color=colors,
+            opacity=0.7
+        ),
+        row=2, col=1
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title=title,
+        yaxis_title="Price ($)",
+        xaxis_rangeslider_visible=False,
+        template="plotly_white",
+        height=600,
+        showlegend=True
+    )
+    
+    fig.update_yaxes(title_text="Volume", row=2, col=1)
+    
     return fig
 
+def create_technical_indicators_chart(data):
+    """Create comprehensive technical indicators chart"""
+    if data.empty or 'RSI' not in data.columns:
+        return go.Figure()
+    
+    # Create subplots for multiple indicators
+    fig = make_subplots(
+        rows=4, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        subplot_titles=('RSI', 'MACD', 'Stochastic Oscillator', 'Bollinger Bands'),
+        row_heights=[0.2, 0.2, 0.2, 0.4]
+    )
+    
+    # RSI
+    fig.add_trace(
+        go.Scatter(x=data.index, y=data['RSI'], name='RSI', line=dict(color='purple')),
+        row=1, col=1
+    )
+    fig.add_hline(y=70, line_dash="dash", line_color="red", row=1, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color="green", row=1, col=1)
+    fig.add_hline(y=50, line_dash="dot", line_color="gray", row=1, col=1)
+    
+    # MACD
+    fig.add_trace(
+        go.Scatter(x=data.index, y=data['MACD'], name='MACD', line=dict(color='blue')),
+        row=2, col=1
+    )
+    fig.add_trace(
+        go.Scatter(x=data.index, y=data['MACD_Signal'], name='Signal', line=dict(color='red')),
+        row=2, col=1
+    )
+    fig.add_trace(
+        go.Bar(x=data.index, y=data['MACD_Histogram'], name='Histogram', opacity=0.7),
+        row=2, col=1
+    )
+    
+    # Stochastic Oscillator
+    if '%K' in data.columns:
+        fig.add_trace(
+            go.Scatter(x=data.index, y=data['%K'], name='%K', line=dict(color='blue')),
+            row=3, col=1
+        )
+        fig.add_trace(
+            go.Scatter(x=data.index, y=data['%D'], name='%D', line=dict(color='red')),
+            row=3, col=1
+        )
+        fig.add_hline(y=80, line_dash="dash", line_color="red", row=3, col=1)
+        fig.add_hline(y=20, line_dash="dash", line_color="green", row=3, col=1)
+    
+    # Bollinger Bands with Price
+    fig.add_trace(
+        go.Scatter(x=data.index, y=data['BB_Upper'], name='BB Upper', line=dict(color='red', dash='dash')),
+        row=4, col=1
+    )
+    fig.add_trace(
+        go.Scatter(x=data.index, y=data['BB_Middle'], name='BB Middle', line=dict(color='orange')),
+        row=4, col=1
+    )
+    fig.add_trace(
+        go.Scatter(x=data.index, y=data['BB_Lower'], name='BB Lower', line=dict(color='red', dash='dash')),
+        row=4, col=1
+    )
+    fig.add_trace(
+        go.Scatter(x=data.index, y=data['Close'], name='Close Price', line=dict(color='black')),
+        row=4, col=1
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title="Technical Indicators Dashboard",
+        template="plotly_white",
+        height=800,
+        showlegend=True
+    )
+    
+    # Update y-axis ranges
+    fig.update_yaxes(range=[0, 100], row=1, col=1)  # RSI
+    fig.update_yaxes(range=[0, 100], row=3, col=1)  # Stochastic
+    
+    return fig
+
+def create_volume_analysis_chart(data):
+    """Create advanced volume analysis chart"""
+    if data.empty:
+        return go.Figure()
+    
+    # Create a copy to avoid modifying the original data
+    volume_data = data.copy()
+    
+    # Calculate volume indicators
+    volume_data['Volume_SMA'] = volume_data['Volume'].rolling(window=20).mean()
+    
+    # Avoid division by zero
+    volume_data['Volume_Ratio'] = np.where(
+        volume_data['Volume_SMA'] > 0,
+        volume_data['Volume'] / volume_data['Volume_SMA'],
+        0
+    )
+    
+    fig = make_subplots(
+        rows=2, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=('Volume vs Moving Average', 'Volume Ratio'),
+        row_heights=[0.6, 0.4]
+    )
+    
+    # Volume bars
+    colors = ['red' if close < open else 'green' 
+              for close, open in zip(volume_data['Close'], volume_data['Open'])]
+    
+    fig.add_trace(
+        go.Bar(x=volume_data.index, y=volume_data['Volume'], name='Volume', marker_color=colors, opacity=0.7),
+        row=1, col=1
+    )
+    
+    fig.add_trace(
+        go.Scatter(x=volume_data.index, y=volume_data['Volume_SMA'], name='Volume SMA(20)', 
+                  line=dict(color='blue', width=2)),
+        row=1, col=1
+    )
+    
+    # Volume ratio
+    fig.add_trace(
+        go.Scatter(x=volume_data.index, y=volume_data['Volume_Ratio'], name='Volume Ratio', 
+                  line=dict(color='purple')),
+        row=2, col=1
+    )
+    fig.add_hline(y=1.5, line_dash="dash", line_color="red", row=2, col=1)
+    fig.add_hline(y=1.0, line_dash="solid", line_color="gray", row=2, col=1)
+    fig.add_hline(y=0.5, line_dash="dash", line_color="green", row=2, col=1)
+    
+    fig.update_layout(
+        title="Volume Analysis",
+        template="plotly_white",
+        height=500
+    )
+    
+    return fig
+
+def display_real_time_metrics(stock_info, current_data):
+    """Display real-time metrics in an attractive format"""
+    if current_data.empty:
+        return
+    
+    current_price = current_data['Close'].iloc[-1]
+    prev_close = stock_info.info.get('regularMarketPreviousClose', current_price)
+    change = current_price - prev_close
+    change_pct = (change / prev_close) * 100 if prev_close != 0 else 0
+    
+    # Real-time indicator
+    st.markdown('<span class="real-time-indicator">🔴 LIVE</span>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        color_class = "positive" if change >= 0 else "negative"
+        st.markdown(f"""
+        <div class="metric-container">
+            <h3>Current Price</h3>
+            <h2 class="{color_class}">${current_price:.2f}</h2>
+            <p class="{color_class}">
+                {'▲' if change >= 0 else '▼'} ${abs(change):.2f} ({change_pct:+.2f}%)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        day_high = current_data['High'].max()
+        day_low = current_data['Low'].min()
+        st.markdown(f"""
+        <div class="metric-container">
+            <h3>Day Range</h3>
+            <p><strong>High:</strong> ${day_high:.2f}</p>
+            <p><strong>Low:</strong> ${day_low:.2f}</p>
+            <p><strong>Range:</strong> ${day_high - day_low:.2f}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        total_volume = current_data['Volume'].sum()
+        avg_volume = stock_info.info.get('averageVolume', 0)
+        volume_ratio = total_volume / avg_volume if avg_volume > 0 else 0
+        st.markdown(f"""
+        <div class="metric-container">
+            <h3>Volume</h3>
+            <p><strong>Today:</strong> {total_volume:,}</p>
+            <p><strong>Avg:</strong> {avg_volume:,}</p>
+            <p><strong>Ratio:</strong> {volume_ratio:.2f}x</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        market_cap = stock_info.info.get('marketCap', 0)
+        pe_ratio = stock_info.info.get('trailingPE', 'N/A')
+        
+        # Format market cap safely
+        if isinstance(market_cap, (int, float)) and market_cap > 0:
+            if market_cap >= 1e12:
+                market_cap_str = f"${market_cap/1e12:.1f}T"
+            elif market_cap >= 1e9:
+                market_cap_str = f"${market_cap/1e9:.1f}B"
+            elif market_cap >= 1e6:
+                market_cap_str = f"${market_cap/1e6:.1f}M"
+            else:
+                market_cap_str = f"${market_cap:,.0f}"
+        else:
+            market_cap_str = "N/A"
+            
+        st.markdown(f"""
+        <div class="metric-container">
+            <h3>Key Metrics</h3>
+            <p><strong>Market Cap:</strong> {market_cap_str}</p>
+            <p><strong>P/E:</strong> {pe_ratio}</p>
+            <p><strong>Updated:</strong> {datetime.now().strftime('%H:%M:%S')}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
 def main():
-    st.set_page_config(layout="wide")
-    st.title("Advanced Stock Market Information App")
-
-    ticker = st.text_input("Enter stock ticker (e.g., AAPL for Apple Inc.):").upper()
-
-    if ticker:
-        stock = get_stock_info(ticker)
-        info = stock.info
-
-        # Summary
-        st.header("Summary")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.write(f"Company: {info['longName']}")
-            st.write(f"Sector: {info.get('sector', 'N/A')}")
-            st.write(f"Industry: {info.get('industry', 'N/A')}")
-        with col2:
-            st.write(f"Current Price: ${info.get('currentPrice', 'N/A')}")
-            st.write(f"Market Cap: ${info.get('marketCap', 'N/A'):,}")
-            st.write(f"P/E Ratio: {info.get('trailingPE', 'N/A')}")
-        with col3:
-            st.write(f"52 Week High: ${info.get('fiftyTwoWeekHigh', 'N/A')}")
-            st.write(f"52 Week Low: ${info.get('fiftyTwoWeekLow', 'N/A')}")
-            st.write(f"Dividend Yield: {info.get('dividendYield', 'N/A')}")
-
-        # Charts
-        st.header("Charts")
-        data = stock.history(period="1y")
+    st.title("🚀 Advanced Real-Time Stock Analyzer")
+    st.markdown("*Professional-grade stock analysis with real-time updates and advanced technical indicators*")
+    
+    # Sidebar configuration
+    with st.sidebar:
+        st.header("⚙️ Configuration")
         
-        tab1, tab2, tab3 = st.tabs(["Price Chart", "Volume Chart", "Moving Averages"])
+        # Stock ticker input
+        ticker = st.text_input(
+            "📊 Stock Ticker", 
+            value="AAPL", 
+            help="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)",
+            max_chars=10
+        ).upper().strip()
         
-        with tab1:
-            st.plotly_chart(plot_price_chart(data), use_container_width=True)
+        # Validate ticker format
+        if ticker and not ticker.replace('-', '').replace('.', '').isalnum():
+            st.warning("⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)")
+            ticker = ""
         
-        with tab2:
-            st.plotly_chart(plot_volume_chart(data), use_container_width=True)
-
-        with tab3:
-            ma_data = calculate_moving_averages(data)
-            st.plotly_chart(plot_moving_averages(ma_data), use_container_width=True)
-
-        # Financial Metrics
-        st.header("Financial Metrics")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Valuation Measures")
-            st.write(f"Market Cap: ${info.get('marketCap', 'N/A'):,}")
-            st.write(f"Enterprise Value: ${info.get('enterpriseValue', 'N/A'):,}")
-            st.write(f"Trailing P/E: {info.get('trailingPE', 'N/A')}")
-            st.write(f"Forward P/E: {info.get('forwardPE', 'N/A')}")
-            st.write(f"PEG Ratio: {info.get('pegRatio', 'N/A')}")
-            st.write(f"Price/Sales: {info.get('priceToSalesTrailing12Months', 'N/A')}")
-            st.write(f"Price/Book: {info.get('priceToBook', 'N/A')}")
-        with col2:
-            st.subheader("Financial Highlights")
-            st.write(f"Profit Margin: {info.get('profitMargins', 'N/A')}")
-            st.write(f"Operating Margin: {info.get('operatingMargins', 'N/A')}")
-            st.write(f"Return on Assets: {info.get('returnOnAssets', 'N/A')}")
-            st.write(f"Return on Equity: {info.get('returnOnEquity', 'N/A')}")
-            st.write(f"Revenue Growth: {info.get('revenueGrowth', 'N/A')}")
-            st.write(f"Earnings Growth: {info.get('earningsGrowth', 'N/A')}")
-
-        # Financial Statements
-        st.header("Financial Statements")
+        # Time period selection
+        period_options = {
+            "1 Day": "1d",
+            "5 Days": "5d", 
+            "1 Month": "1mo",
+            "3 Months": "3mo",
+            "6 Months": "6mo",
+            "1 Year": "1y",
+            "2 Years": "2y"
+        }
+        selected_period = st.selectbox("📅 Time Period", list(period_options.keys()), index=6)
+        period = period_options[selected_period]
         
-        tab1, tab2, tab3 = st.tabs(["Income Statement", "Balance Sheet", "Cash Flow"])
+        # Auto-refresh toggle
+        auto_refresh = st.checkbox("🔄 Auto Refresh (30s)", value=False)
         
-        with tab1:
-            st.subheader("Income Statement")
-            income_stmt = stock.financials
-            st.dataframe(income_stmt)
+        # Refresh button
+        if st.button("🔄 Refresh Now"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+    
+    if not ticker:
+        st.warning("Please enter a stock ticker symbol")
+        return
+    
+    # Auto-refresh implementation using session state
+    if auto_refresh:
+        if 'last_refresh' not in st.session_state:
+            st.session_state.last_refresh = time.time()
         
-        with tab2:
-            st.subheader("Balance Sheet")
-            balance_sheet = stock.balance_sheet
-            st.dataframe(balance_sheet)
-        
-        with tab3:
-            st.subheader("Cash Flow")
-            cash_flow = stock.cashflow
-            st.dataframe(cash_flow)
-
-        # Analyst Recommendations
-        st.header("Analyst Recommendations")
-        recommendations = stock.recommendations
-        if not recommendations.empty:
-            st.dataframe(recommendations)
-        else:
-            st.write("No analyst recommendations available.")
-
-        # News
-        # News
-        # News
-        st.header("Recent News")
-        news = stock.news
-        for item in news[:5]:  # Display top 5 news items
-            st.subheader(item.get('title', 'No title available'))
-            if 'source' in item:
-                st.write(f"Source: {item['source']}")
-            if 'providerPublishTime' in item:
-                st.write(f"Published: {datetime.fromtimestamp(item['providerPublishTime'])}")
-            if 'link' in item:
-                st.write(item['link'])
-            st.write("---")
-        # Technical Analysis
-        st.header("Technical Analysis")
-
-        # RSI Calculation
-        delta = data['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        st.subheader("Relative Strength Index (RSI)")
-        fig_rsi = px.line(x=data.index, y=rsi, title='RSI (14-day)')
-        fig_rsi.add_hline(y=70, line_dash="dash", line_color="red")
-        fig_rsi.add_hline(y=30, line_dash="dash", line_color="green")
-        st.plotly_chart(fig_rsi, use_container_width=True)
-
-        # MACD Calculation
-        exp1 = data['Close'].ewm(span=12, adjust=False).mean()
-        exp2 = data['Close'].ewm(span=26, adjust=False).mean()
-        macd = exp1 - exp2
-        signal = macd.ewm(span=9, adjust=False).mean()
-        histogram = macd - signal
-
-        st.subheader("Moving Average Convergence Divergence (MACD)")
-        fig_macd = go.Figure()
-        fig_macd.add_trace(go.Scatter(x=data.index, y=macd, name="MACD"))
-        fig_macd.add_trace(go.Scatter(x=data.index, y=signal, name="Signal"))
-        fig_macd.add_trace(go.Bar(x=data.index, y=histogram, name="Histogram"))
-        fig_macd.update_layout(title="MACD, Signal and Histogram")
-        st.plotly_chart(fig_macd, use_container_width=True)
-
-        # Bollinger Bands
-        data['MA20'] = data['Close'].rolling(window=20).mean()
-        data['20d_std'] = data['Close'].rolling(window=20).std()
-        data['Upper_BB'] = data['MA20'] + (data['20d_std'] * 2)
-        data['Lower_BB'] = data['MA20'] - (data['20d_std'] * 2)
-
-        st.subheader("Bollinger Bands")
-        fig_bb = go.Figure()
-        fig_bb.add_trace(go.Scatter(x=data.index, y=data['Upper_BB'], name="Upper BB"))
-        fig_bb.add_trace(go.Scatter(x=data.index, y=data['MA20'], name="MA20"))
-        fig_bb.add_trace(go.Scatter(x=data.index, y=data['Lower_BB'], name="Lower BB"))
-        fig_bb.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Close"))
-        fig_bb.update_layout(title="Bollinger Bands")
-        st.plotly_chart(fig_bb, use_container_width=True)
-
-        # Options Chain
-        st.header("Options Chain")
-        expiration_dates = stock.options
-
-        if expiration_dates:
-            selected_date = st.selectbox("Select expiration date", expiration_dates)
-            options = stock.option_chain(selected_date)
+        current_time = time.time()
+        if current_time - st.session_state.last_refresh >= 30:
+            st.session_state.last_refresh = current_time
+            st.cache_data.clear()
+            st.rerun()
+    
+    try:
+        # Get stock information
+        with st.spinner(f"📈 Loading data for {ticker}..."):
+            stock = get_stock_info(ticker)
+            if not stock:
+                return
             
-            st.subheader("Call Options")
-            st.dataframe(options.calls)
+            # Get historical data
+            historical_data = stock.history(period=period)
+            if historical_data.empty:
+                st.error("No data available for this ticker")
+                return
             
-            st.subheader("Put Options")
-            st.dataframe(options.puts)
+            # Calculate technical indicators
+            historical_data = calculate_technical_indicators(historical_data)
+            
+            # Get real-time intraday data
+            real_time_data = get_real_time_data(ticker)
+        
+        # Company header
+        company_name = stock.info.get('longName', ticker)
+        sector = stock.info.get('sector', 'N/A')
+        st.subheader(f"📈 {company_name} ({ticker})")
+        st.caption(f"Sector: {sector}")
+        
+        # Real-time metrics
+        st.header("📊 Real-Time Overview")
+        if not real_time_data.empty:
+            display_real_time_metrics(stock, real_time_data)
         else:
-            st.write("No options data available for this stock.")
-
-          # Major Holders
-        st.header("Major Holders")
-        major_holders = stock.major_holders
-        if not major_holders.empty:
-            st.dataframe(major_holders)
-        else:
-            st.write("No major holders data available.")
-
-        # Institutional Holders
-        st.header("Institutional Holders")
-        institutional_holders = stock.institutional_holders
-        if not institutional_holders.empty:
-            st.dataframe(institutional_holders)
-        else:
-            st.write("No institutional holders data available.")
-
-        # Dividends
-        st.header("Dividends")
-        dividends = stock.dividends
-        if not dividends.empty:
-            fig_div = px.line(x=dividends.index, y=dividends.values, title='Dividend History')
-            st.plotly_chart(fig_div, use_container_width=True)
-        else:
-            st.write("No dividend data available.")
-
-        # Stock Splits
-        st.header("Stock Splits")
-        splits = stock.splits
-        if not splits.empty:
-            st.dataframe(splits)
-        else:
-            st.write("No stock split data available.")
-
-        # Company Info
-        st.header("Company Information")
-        st.write(info.get('longBusinessSummary', 'No company information available.'))
-
-        # Sustainability
-        st.header("Sustainability")
-        sustainability = stock.sustainability
-        if sustainability is not None:
-            st.dataframe(sustainability)
-        else:
-            st.write("No sustainability data available.")
-
-        # Earnings
-        st.header("Earnings")
-        earnings = stock.earnings
-        if not earnings.empty:
-            fig_earnings = go.Figure()
-            fig_earnings.add_trace(go.Bar(x=earnings.index, y=earnings['Earnings'], name='Earnings'))
-            fig_earnings.add_trace(go.Bar(x=earnings.index, y=earnings['Revenue'], name='Revenue'))
-            fig_earnings.update_layout(title='Earnings and Revenue History', barmode='group')
-            st.plotly_chart(fig_earnings, use_container_width=True)
-        else:
-            st.write("No earnings data available.")
-
-        # Earnings Calendar
-        st.header("Earnings Calendar")
-        earnings_dates = stock.earnings_dates
-        if not earnings_dates.empty:
-            st.dataframe(earnings_dates)
-        else:
-            st.write("No earnings calendar data available.")
+            st.warning("Real-time data not available, showing latest market data")
+            display_real_time_metrics(stock, historical_data.tail(1))
+        
+        # Main charts section
+        st.header("📈 Advanced Charts")
+        
+        chart_tabs = st.tabs([
+            "📊 Price & Volume", 
+            "🔬 Technical Indicators", 
+            "📦 Volume Analysis",
+            "📋 Financial Overview"
+        ])
+        
+        with chart_tabs[0]:
+            st.subheader("Price Action & Volume")
+            if not real_time_data.empty:
+                # Show intraday chart for current day
+                intraday_chart = create_advanced_candlestick_chart(
+                    real_time_data, f"{ticker} - Intraday (1-minute intervals)"
+                )
+                st.plotly_chart(intraday_chart, use_container_width=True)
+            
+            # Historical chart
+            historical_chart = create_advanced_candlestick_chart(
+                historical_data, f"{ticker} - Historical ({selected_period})"
+            )
+            st.plotly_chart(historical_chart, use_container_width=True)
+        
+        with chart_tabs[1]:
+            st.subheader("Technical Indicators Dashboard")
+            tech_chart = create_technical_indicators_chart(historical_data)
+            st.plotly_chart(tech_chart, use_container_width=True)
+            
+            # Technical analysis summary
+            if 'RSI' in historical_data.columns and not historical_data['RSI'].empty:
+                latest_rsi = historical_data['RSI'].iloc[-1]
+                latest_macd = historical_data['MACD'].iloc[-1]
+                latest_signal = historical_data['MACD_Signal'].iloc[-1]
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if not pd.isna(latest_rsi):
+                        rsi_signal = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
+                        st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
+                    else:
+                        st.metric("RSI (14)", "N/A", "Insufficient data")
+                
+                with col2:
+                    if not pd.isna(latest_macd) and not pd.isna(latest_signal):
+                        macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
+                        st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
+                    else:
+                        st.metric("MACD Signal", "N/A", "Insufficient data")
+                
+                with col3:
+                    if 'ATR' in historical_data.columns and not historical_data['ATR'].empty:
+                        latest_atr = historical_data['ATR'].iloc[-1]
+                        if not pd.isna(latest_atr):
+                            st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
+                        else:
+                            st.metric("ATR (14)", "N/A", "Insufficient data")
+        
+        with chart_tabs[2]:
+            st.subheader("Volume Analysis")
+            volume_chart = create_volume_analysis_chart(historical_data)
+            st.plotly_chart(volume_chart, use_container_width=True)
+        
+        with chart_tabs[3]:
+            st.subheader("Financial Overview")
+            
+            # Key financial metrics
+            info = stock.info
+            
+            col1, col2, col3, col4 = st.columns(4)
+            metrics = [
+                ("Market Cap", info.get('marketCap', 0), "B", 1e9),
+                ("Revenue", info.get('totalRevenue', 0), "B", 1e9),
+                ("P/E Ratio", info.get('trailingPE', 0), "", 1),
+                ("Dividend Yield", info.get('dividendYield', 0), "%", 100),
+                ("ROE", info.get('returnOnEquity', 0), "%", 100),
+                ("Profit Margin", info.get('profitMargins', 0), "%", 100),
+                ("Debt/Equity", info.get('debtToEquity', 0), "", 1),
+                ("Beta", info.get('beta', 0), "", 1)
+            ]
+            
+            for i, (label, value, suffix, divisor) in enumerate(metrics):
+                col = [col1, col2, col3, col4][i % 4]
+                with col:
+                    if isinstance(value, (int, float)) and value != 0:
+                        formatted_value = f"{value/divisor:.2f}{suffix}" if divisor > 1 else f"{value:.2f}{suffix}"
+                    else:
+                        formatted_value = "N/A"
+                    st.metric(label, formatted_value)
+        
+        # Additional information sections
+        if st.expander("📰 Recent News", expanded=False):
+            news = stock.news
+            if news:
+                valid_news_count = 0
+                for item in news:
+                    # Only show news items with valid titles
+                    title = item.get('title', '').strip()
+                    if title and title != 'No title' and valid_news_count < 5:
+                        st.markdown(f"**{title}**")
+                        
+                        # Add publication info if available
+                        if 'providerPublishTime' in item:
+                            try:
+                                publish_time = datetime.fromtimestamp(item['providerPublishTime'])
+                                publisher = item.get('publisher', 'Unknown')
+                                st.caption(f"📅 {publish_time.strftime('%Y-%m-%d %H:%M')} | 🏢 {publisher}")
+                            except (ValueError, OSError):
+                                # Handle invalid timestamp
+                                st.caption(f"🏢 {item.get('publisher', 'Unknown')}")
+                        
+                        # Add link if available
+                        if 'link' in item and item['link']:
+                            st.markdown(f"[Read more]({item['link']})")
+                        
+                        st.divider()
+                        valid_news_count += 1
+                
+                if valid_news_count == 0:
+                    st.info("No recent news with valid titles available")
+            else:
+                st.info("No recent news available")
+        
+        if st.expander("🏢 Company Information", expanded=False):
+            st.write(info.get('longBusinessSummary', 'No company information available.'))
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Industry:** {info.get('industry', 'N/A')}")
+                st.write(f"**Employees:** {info.get('fullTimeEmployees', 'N/A'):,}")
+                st.write(f"**Founded:** {info.get('startDate', 'N/A')}")
+            
+            with col2:
+                st.write(f"**Website:** {info.get('website', 'N/A')}")
+                st.write(f"**Country:** {info.get('country', 'N/A')}")
+                st.write(f"**Currency:** {info.get('currency', 'N/A')}")
+    
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+        st.info("Please check the ticker symbol and try again.")
+        
+        # Show helpful suggestions for common errors
+        if "No data found" in str(e) or "Invalid ticker" in str(e):
+            st.info("💡 **Tips:**")
+            st.info("• Make sure the ticker symbol is correct (e.g., AAPL, GOOGL, TSLA)")
+            st.info("• Some stocks may not have real-time data available")
+            st.info("• Try a major stock exchange symbol")
 
 if __name__ == "__main__":
-    main()        
+    main()
