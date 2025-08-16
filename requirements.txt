@@ -9,3 +9,4 @@ seaborn
 statsmodels
 scipy
 requests
+pyperclip
