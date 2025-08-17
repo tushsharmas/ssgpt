@@ -17,7 +17,7 @@ An **interactive, all-in-one stock market dashboard** powered by
 ## 🎥 Quick Demo & Screenshots
 Try out the live demo here:  
 
-👉 [**Open Streamlit App**](https://your-app-name.streamlit.app)
+👉 [**Open Streamlit App**](https://tushsharmas-ssgpt.streamlit.app/)
 
 
 <div align="center">
