@@ -15,6 +15,10 @@ An **interactive, all-in-one stock market dashboard** powered by
 ---
 
 ## 🎥 Quick Demo & Screenshots
+Try out the live demo here:  
+
+👉 [**Open Streamlit App**](https://your-app-name.streamlit.app)
+
 
 <div align="center">
 
