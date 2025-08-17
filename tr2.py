@@ -7,8 +7,146 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import time
 import numpy as np
+import requests
 
+# ==========================
+# Company Name/Ticker Search (Autocomplete Feature)
+# ==========================
+
+@st.cache_data(ttl=3600)
+def fetch_ticker_suggestions(query, max_results=5):
+    """
+    Fetch matching tickers and company names using Yahoo Finance autocompletion API.
+    Returns a list of tuples: (symbol, name, exchange)
+    """
+    if not query or len(query) < 2:
+        return []  # Don't spam API for short queries
+
+    url = (
+        f"https://query2.finance.yahoo.com/v1/finance/search"
+        f"?q={query}&quotesCount={max_results}&newsCount=0&lang=en"
+    )
+    try:
+        resp = requests.get(url, timeout=2)
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+        suggestions = []
+        for item in data.get("quotes", []):
+            symbol = item.get("symbol")
+            name = item.get("shortname") or item.get("longname") or ""
+            exch = item.get("exchange", "")
+            # Filter out cryptocurrencies and funds for relevance
+            if item.get("quoteType") in ("EQUITY", "ETF"):
+                suggestions.append((symbol, name, exch))
+        return suggestions[:max_results]
+    except Exception:
+        return []
+
+def ticker_autocomplete_input(label, key, default="AAPL", help=None):
+    """
+    Render an autocomplete search bar for ticker/company name selection.
+    Returns the selected ticker symbol (str).
+    """
+    # Show input and suggestions below
+    query = st.text_input(label, value=default, key=key, help=help, max_chars=30)
+    suggestions = fetch_ticker_suggestions(query.strip())
+    selection = None
+
+    if suggestions and len(query.strip()) >= 2:
+        options = []
+        for symbol, name, exch in suggestions:
+            display = f"{symbol} - {name} ({exch})" if name else f"{symbol} ({exch})"
+            options.append(display)
+        # Use radio for keyboard/mouse selection
+        st.markdown('<div style="margin-bottom: 0.5em;"></div>', unsafe_allow_html=True)
+        picked = st.radio(
+            "Select a stock:",
+            options,
+            key=f"{key}_radio",
+            index=0 if options else -1,
+            horizontal=False,
+        )
+        if picked:
+            selection = picked.split(" - ")[0].split(" ")[0]  # Extract symbol
+    else:
+        selection = query.strip()
+    return selection.upper().strip()
+
+# ==========================
+# Portfolio Tracker (Watchlist) Feature
+# ==========================
+
+def get_watchlist():
+    if "watchlist" not in st.session_state:
+        st.session_state["watchlist"] = []
+    return st.session_state["watchlist"]
+
+def add_to_watchlist(ticker):
+    watchlist = get_watchlist()
+    ticker = ticker.upper().strip()
+    if ticker and ticker not in watchlist:
+        watchlist.append(ticker)
+        st.session_state["watchlist"] = watchlist
+
+def remove_from_watchlist(ticker):
+    watchlist = get_watchlist()
+    ticker = ticker.upper().strip()
+    if ticker in watchlist:
+        watchlist.remove(ticker)
+        st.session_state["watchlist"] = watchlist
+
+def display_watchlist(selected_ticker_callback=None):
+    st.sidebar.markdown("## 📋 My Watchlist")
+    watchlist = get_watchlist()
+    if not watchlist:
+        st.sidebar.info("Your watchlist is empty. Add stocks to track them here!")
+        return
+    tickers_data = {}
+    for ticker in watchlist:
+        try:
+            stock = yf.Ticker(ticker)
+            price = stock.info.get("regularMarketPrice", None)
+            prev = stock.info.get("regularMarketPreviousClose", None)
+            daychg = None
+            pctchg = None
+            if price is not None and prev is not None and prev != 0:
+                daychg = price - prev
+                pctchg = (daychg / prev) * 100
+            tickers_data[ticker] = {
+                "price": price,
+                "daychg": daychg,
+                "pctchg": pctchg
+            }
+        except Exception:
+            tickers_data[ticker] = {"price": None, "daychg": None, "pctchg": None}
+    for ticker in watchlist:
+        data = tickers_data[ticker]
+        label = f"**{ticker}**"
+        if data["price"] is not None:
+            label += f" ${data['price']:.2f} "
+            if data["daychg"] is not None:
+                emoji = "🟢" if data["daychg"] >= 0 else "🔴"
+                label += f"{emoji} {data['daychg']:+.2f} ({data['pctchg']:+.2f}%)"
+        else:
+            label += " -"
+        cols = st.sidebar.columns([0.7, 0.15, 0.15])
+        with cols[0]:
+            if st.button(label, key=f"goto_{ticker}"):
+                if selected_ticker_callback:
+                    selected_ticker_callback(ticker)
+                else:
+                    st.session_state["selected_ticker"] = ticker
+        with cols[1]:
+            st.markdown("")
+        with cols[2]:
+            if st.button("❌", key=f"rm_{ticker}"):
+                remove_from_watchlist(ticker)
+                st.experimental_rerun()
+
+# ==========================
 # Configure page
+# ==========================
 st.set_page_config(
     page_title="Advanced Real-Time Stock Analyzer",
     page_icon="📈",
@@ -440,23 +578,34 @@ def main():
     st.title("🚀 Advanced Real-Time Stock Analyzer")
     st.markdown("*Professional-grade stock analysis with real-time updates and advanced technical indicators*")
     
+    # --- Portfolio Tracker Sidebar ---
+    def set_selected_ticker(ticker):
+        st.session_state["selected_ticker"] = ticker
+
+    display_watchlist(selected_ticker_callback=set_selected_ticker)
+
     # Sidebar configuration
     with st.sidebar:
         st.header("⚙️ Configuration")
         
-        # Stock ticker input
-        ticker = st.text_input(
-            "📊 Stock Ticker", 
-            value="AAPL", 
-            help="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)",
-            max_chars=10
-        ).upper().strip()
-        
+        # Stock ticker autocomplete input (NEW FEATURE)
+        ticker = ticker_autocomplete_input(
+            "🔍 Search Stock (Name or Ticker)", 
+            key="autocomplete", 
+            default=st.session_state.get("selected_ticker", "AAPL"), 
+            help="Start typing a company name or ticker symbol (e.g., Apple, Microsoft, TSLA)"
+        )
+
         # Validate ticker format
         if ticker and not ticker.replace('-', '').replace('.', '').isalnum():
             st.warning("⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)")
             ticker = ""
         
+        # Watchlist add button
+        if ticker and st.button("⭐ Add to Watchlist", key="add_watchlist"):
+            add_to_watchlist(ticker)
+            st.success(f"{ticker} added to watchlist!")
+
         # Time period selection
         period_options = {
             "1 Day": "1d",
@@ -478,6 +627,10 @@ def main():
             st.cache_data.clear()
             st.cache_resource.clear()
     
+    # If ticker in session_state due to sidebar selection, override
+    if "selected_ticker" in st.session_state and st.session_state["selected_ticker"]:
+        ticker = st.session_state.pop("selected_ticker")
+
     if not ticker:
         st.warning("Please enter a stock ticker symbol")
         return
