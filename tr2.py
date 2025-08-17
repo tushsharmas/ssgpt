@@ -8,7 +8,68 @@ from datetime import datetime, timedelta
 import time
 import numpy as np
 
-# Configure page
+WATCHLIST_KEY = "portfolio_watchlist"
+
+def init_watchlist():
+    if WATCHLIST_KEY not in st.session_state:
+        st.session_state[WATCHLIST_KEY] = []
+
+def get_watchlist():
+    init_watchlist()
+    return st.session_state[WATCHLIST_KEY]
+
+def add_to_watchlist(ticker):
+    watchlist = get_watchlist()
+    ticker = ticker.upper().strip()
+    if ticker and ticker not in watchlist:
+        watchlist.append(ticker)
+        st.session_state[WATCHLIST_KEY] = watchlist
+
+def remove_from_watchlist(ticker):
+    watchlist = get_watchlist()
+    ticker = ticker.upper().strip()
+    if ticker in watchlist:
+        watchlist.remove(ticker)
+        st.session_state[WATCHLIST_KEY] = watchlist
+
+def clear_watchlist():
+    st.session_state[WATCHLIST_KEY] = []
+
+def fetch_watchlist_data(watchlist):
+    data = []
+    for ticker in watchlist:
+        try:
+            stock = yf.Ticker(ticker)
+            price = stock.info.get("regularMarketPrice", None)
+            prev_close = stock.info.get("regularMarketPreviousClose", None)
+            name = stock.info.get("shortName", ticker)
+            if price is not None and prev_close is not None:
+                change = price - prev_close
+                change_pct = (change / prev_close) * 100 if prev_close != 0 else 0
+            else:
+                change = 0
+                change_pct = 0
+            data.append({
+                "Ticker": ticker,
+                "Name": name,
+                "Current Price": price,
+                "Change": change,
+                "Change %": change_pct,
+            })
+        except Exception:
+            data.append({
+                "Ticker": ticker,
+                "Name": ticker,
+                "Current Price": "N/A",
+                "Change": "N/A",
+                "Change %": "N/A"
+            })
+    return pd.DataFrame(data)
+
+# -------------
+# --- CSS -----
+# -------------
+
 st.set_page_config(
     page_title="Advanced Real-Time Stock Analyzer",
     page_icon="📈",
@@ -16,7 +77,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better UI
 st.markdown("""
 <style>
     .metric-container {
@@ -41,12 +101,40 @@ st.markdown("""
         50% { opacity: 0.5; }
         100% { opacity: 1; }
     }
+    .watchlist-table td, .watchlist-table th {
+        padding: 0.4em 0.8em;
+    }
+    .watchlist-table th {
+        background: #f2f2f6;
+        font-weight: bold;
+    }
+    .watchlist-row:hover {
+        background-color: #e6f7ff !important;
+        cursor: pointer;
+    }
+    .watchlist-remove {
+        color: #ff4444;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .watchlist-chart-btn {
+        background-color: #33b5e5;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 0.2em 0.7em;
+        margin-left: 0.5em;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+    .watchlist-chart-btn:hover {
+        background-color: #0077b6;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_resource(ttl=300)  # Cache for 5 minutes
+@st.cache_resource(ttl=300)
 def get_stock_info(ticker):
-    """Get comprehensive stock information"""
     try:
         stock = yf.Ticker(ticker)
         return stock
@@ -54,12 +142,10 @@ def get_stock_info(ticker):
         st.error(f"Error fetching stock data: {e}")
         return None
 
-@st.cache_data(ttl=60)  # Cache for 1 minute for real-time feel
+@st.cache_data(ttl=60)
 def get_real_time_data(ticker):
-    """Get real-time stock data"""
     try:
         stock = yf.Ticker(ticker)
-        # Get intraday data for real-time feel
         data = stock.history(period="1d", interval="1m")
         return data
     except Exception as e:
@@ -67,59 +153,40 @@ def get_real_time_data(ticker):
         return pd.DataFrame()
 
 def calculate_technical_indicators(data):
-    """Calculate comprehensive technical indicators"""
     if data.empty:
         return data
-    
-    # Simple Moving Averages
     data['SMA_20'] = data['Close'].rolling(window=20).mean()
     data['SMA_50'] = data['Close'].rolling(window=50).mean()
     data['SMA_200'] = data['Close'].rolling(window=200).mean()
-    
-    # Exponential Moving Averages
     data['EMA_12'] = data['Close'].ewm(span=12).mean()
     data['EMA_26'] = data['Close'].ewm(span=26).mean()
     data['EMA_50'] = data['Close'].ewm(span=50).mean()
-    
-    # RSI
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / loss
     data['RSI'] = 100 - (100 / (1 + rs))
-    
-    # MACD
     data['MACD'] = data['EMA_12'] - data['EMA_26']
     data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
     data['MACD_Histogram'] = data['MACD'] - data['MACD_Signal']
-    
-    # Bollinger Bands
     data['BB_Middle'] = data['Close'].rolling(window=20).mean()
     bb_std = data['Close'].rolling(window=20).std()
     data['BB_Upper'] = data['BB_Middle'] + (bb_std * 2)
     data['BB_Lower'] = data['BB_Middle'] - (bb_std * 2)
-    
-    # Stochastic Oscillator
     low_14 = data['Low'].rolling(window=14).min()
     high_14 = data['High'].rolling(window=14).max()
     data['%K'] = 100 * ((data['Close'] - low_14) / (high_14 - low_14))
     data['%D'] = data['%K'].rolling(window=3).mean()
-    
-    # Average True Range (ATR)
     data['H-L'] = data['High'] - data['Low']
     data['H-PC'] = abs(data['High'] - data['Close'].shift(1))
     data['L-PC'] = abs(data['Low'] - data['Close'].shift(1))
     data['TR'] = data[['H-L', 'H-PC', 'L-PC']].max(axis=1)
     data['ATR'] = data['TR'].rolling(window=14).mean()
-    
     return data
 
 def create_advanced_candlestick_chart(data, title="Stock Price"):
-    """Create advanced candlestick chart with volume"""
     if data.empty:
         return go.Figure()
-    
-    # Create subplots
     fig = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True,
@@ -127,8 +194,6 @@ def create_advanced_candlestick_chart(data, title="Stock Price"):
         subplot_titles=(title, 'Volume'),
         row_heights=[0.7, 0.3]
     )
-    
-    # Candlestick chart
     fig.add_trace(
         go.Candlestick(
             x=data.index,
@@ -142,8 +207,6 @@ def create_advanced_candlestick_chart(data, title="Stock Price"):
         ),
         row=1, col=1
     )
-    
-    # Add moving averages if available
     if 'SMA_20' in data.columns:
         fig.add_trace(
             go.Scatter(
@@ -155,7 +218,6 @@ def create_advanced_candlestick_chart(data, title="Stock Price"):
             ),
             row=1, col=1
         )
-    
     if 'SMA_50' in data.columns:
         fig.add_trace(
             go.Scatter(
@@ -167,11 +229,8 @@ def create_advanced_candlestick_chart(data, title="Stock Price"):
             ),
             row=1, col=1
         )
-    
-    # Volume chart
-    colors = ['red' if close < open else 'green' 
+    colors = ['red' if close < open else 'green'
               for close, open in zip(data['Close'], data['Open'])]
-    
     fig.add_trace(
         go.Bar(
             x=data.index,
@@ -182,8 +241,6 @@ def create_advanced_candlestick_chart(data, title="Stock Price"):
         ),
         row=2, col=1
     )
-    
-    # Update layout
     fig.update_layout(
         title=title,
         yaxis_title="Price ($)",
@@ -192,17 +249,12 @@ def create_advanced_candlestick_chart(data, title="Stock Price"):
         height=600,
         showlegend=True
     )
-    
     fig.update_yaxes(title_text="Volume", row=2, col=1)
-    
     return fig
 
 def create_technical_indicators_chart(data):
-    """Create comprehensive technical indicators chart"""
     if data.empty or 'RSI' not in data.columns:
         return go.Figure()
-    
-    # Create subplots for multiple indicators
     fig = make_subplots(
         rows=4, cols=1,
         shared_xaxes=True,
@@ -210,8 +262,6 @@ def create_technical_indicators_chart(data):
         subplot_titles=('RSI', 'MACD', 'Stochastic Oscillator', 'Bollinger Bands'),
         row_heights=[0.2, 0.2, 0.2, 0.4]
     )
-    
-    # RSI
     fig.add_trace(
         go.Scatter(x=data.index, y=data['RSI'], name='RSI', line=dict(color='purple')),
         row=1, col=1
@@ -219,8 +269,6 @@ def create_technical_indicators_chart(data):
     fig.add_hline(y=70, line_dash="dash", line_color="red", row=1, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="green", row=1, col=1)
     fig.add_hline(y=50, line_dash="dot", line_color="gray", row=1, col=1)
-    
-    # MACD
     fig.add_trace(
         go.Scatter(x=data.index, y=data['MACD'], name='MACD', line=dict(color='blue')),
         row=2, col=1
@@ -233,8 +281,6 @@ def create_technical_indicators_chart(data):
         go.Bar(x=data.index, y=data['MACD_Histogram'], name='Histogram', opacity=0.7),
         row=2, col=1
     )
-    
-    # Stochastic Oscillator
     if '%K' in data.columns:
         fig.add_trace(
             go.Scatter(x=data.index, y=data['%K'], name='%K', line=dict(color='blue')),
@@ -246,8 +292,6 @@ def create_technical_indicators_chart(data):
         )
         fig.add_hline(y=80, line_dash="dash", line_color="red", row=3, col=1)
         fig.add_hline(y=20, line_dash="dash", line_color="green", row=3, col=1)
-    
-    # Bollinger Bands with Price
     fig.add_trace(
         go.Scatter(x=data.index, y=data['BB_Upper'], name='BB Upper', line=dict(color='red', dash='dash')),
         row=4, col=1
@@ -264,39 +308,26 @@ def create_technical_indicators_chart(data):
         go.Scatter(x=data.index, y=data['Close'], name='Close Price', line=dict(color='black')),
         row=4, col=1
     )
-    
-    # Update layout
     fig.update_layout(
         title="Technical Indicators Dashboard",
         template="plotly_white",
         height=800,
         showlegend=True
     )
-    
-    # Update y-axis ranges
-    fig.update_yaxes(range=[0, 100], row=1, col=1)  # RSI
-    fig.update_yaxes(range=[0, 100], row=3, col=1)  # Stochastic
-    
+    fig.update_yaxes(range=[0, 100], row=1, col=1)
+    fig.update_yaxes(range=[0, 100], row=3, col=1)
     return fig
 
 def create_volume_analysis_chart(data):
-    """Create advanced volume analysis chart"""
     if data.empty:
         return go.Figure()
-    
-    # Create a copy to avoid modifying the original data
     volume_data = data.copy()
-    
-    # Calculate volume indicators
     volume_data['Volume_SMA'] = volume_data['Volume'].rolling(window=20).mean()
-    
-    # Avoid division by zero
     volume_data['Volume_Ratio'] = np.where(
         volume_data['Volume_SMA'] > 0,
         volume_data['Volume'] / volume_data['Volume_SMA'],
         0
     )
-    
     fig = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True,
@@ -304,23 +335,17 @@ def create_volume_analysis_chart(data):
         subplot_titles=('Volume vs Moving Average', 'Volume Ratio'),
         row_heights=[0.6, 0.4]
     )
-    
-    # Volume bars
-    colors = ['red' if close < open else 'green' 
+    colors = ['red' if close < open else 'green'
               for close, open in zip(volume_data['Close'], volume_data['Open'])]
-    
     fig.add_trace(
         go.Bar(x=volume_data.index, y=volume_data['Volume'], name='Volume', marker_color=colors, opacity=0.7),
         row=1, col=1
     )
-    
     fig.add_trace(
         go.Scatter(x=volume_data.index, y=volume_data['Volume_SMA'], name='Volume SMA(20)', 
                   line=dict(color='blue', width=2)),
         row=1, col=1
     )
-    
-    # Volume ratio
     fig.add_trace(
         go.Scatter(x=volume_data.index, y=volume_data['Volume_Ratio'], name='Volume Ratio', 
                   line=dict(color='purple')),
@@ -329,30 +354,22 @@ def create_volume_analysis_chart(data):
     fig.add_hline(y=1.5, line_dash="dash", line_color="red", row=2, col=1)
     fig.add_hline(y=1.0, line_dash="solid", line_color="gray", row=2, col=1)
     fig.add_hline(y=0.5, line_dash="dash", line_color="green", row=2, col=1)
-    
     fig.update_layout(
         title="Volume Analysis",
         template="plotly_white",
         height=500
     )
-    
     return fig
 
 def display_real_time_metrics(stock_info, current_data):
-    """Display real-time metrics in an attractive format"""
     if current_data.empty:
         return
-    
     current_price = current_data['Close'].iloc[-1]
     prev_close = stock_info.info.get('regularMarketPreviousClose', current_price)
     change = current_price - prev_close
     change_pct = (change / prev_close) * 100 if prev_close != 0 else 0
-    
-    # Real-time indicator
     st.markdown('<span class="real-time-indicator">🔴 LIVE</span>', unsafe_allow_html=True)
-    
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         color_class = "positive" if change >= 0 else "negative"
         st.markdown(f"""
@@ -364,7 +381,6 @@ def display_real_time_metrics(stock_info, current_data):
             </p>
         </div>
         """, unsafe_allow_html=True)
-    
     with col2:
         day_high = current_data['High'].max()
         day_low = current_data['Low'].min()
@@ -376,7 +392,6 @@ def display_real_time_metrics(stock_info, current_data):
             <p><strong>Range:</strong> ${day_high - day_low:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
-    
     with col3:
         total_volume = current_data['Volume'].sum()
         avg_volume = stock_info.info.get('averageVolume', 0)
@@ -389,12 +404,9 @@ def display_real_time_metrics(stock_info, current_data):
             <p><strong>Ratio:</strong> {volume_ratio:.2f}x</p>
         </div>
         """, unsafe_allow_html=True)
-    
     with col4:
         market_cap = stock_info.info.get('marketCap', 0)
         pe_ratio = stock_info.info.get('trailingPE', 'N/A')
-        
-        # Format market cap safely
         if isinstance(market_cap, (int, float)) and market_cap > 0:
             if market_cap >= 1e12:
                 market_cap_str = f"${market_cap/1e12:.1f}T"
@@ -406,7 +418,6 @@ def display_real_time_metrics(stock_info, current_data):
                 market_cap_str = f"${market_cap:,.0f}"
         else:
             market_cap_str = "N/A"
-            
         st.markdown(f"""
         <div class="metric-container">
             <h3>Key Metrics</h3>
@@ -417,27 +428,90 @@ def display_real_time_metrics(stock_info, current_data):
         """, unsafe_allow_html=True)
 
 def main():
-    st.title("🚀 Advanced Real-Time Stock Analyzer")
-    st.markdown("*Professional-grade stock analysis with real-time updates and advanced technical indicators*")
+    st.title("🚀 Stockpedia: Advanced Real-Time Stock Analyzer & Portfolio Tracker")
+    st.markdown("*Professional-grade stock analysis with real-time updates, advanced technical indicators, and portfolio watchlist*")
     
-    # Sidebar configuration
+    # --- Watchlist Sidebar ---
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.header("⭐ Portfolio Tracker (Watchlist)")
+        init_watchlist()
+        current_watchlist = get_watchlist()
+        if st.button("🗑️ Clear Watchlist"):
+            clear_watchlist()
+            st.success("Watchlist cleared!")
+            st.rerun()
         
-        # Stock ticker input
+        if current_watchlist:
+            watchlist_df = fetch_watchlist_data(current_watchlist)
+            def get_row_class(row):
+                if isinstance(row["Change"], (int, float)) and row["Change"] > 0:
+                    return "positive"
+                elif isinstance(row["Change"], (int, float)) and row["Change"] < 0:
+                    return "negative"
+                else:
+                    return "neutral"
+            st.markdown('<div style="max-height:320px;overflow-y:auto;">', unsafe_allow_html=True)
+            st.markdown('<table class="watchlist-table" width="100%">'
+                        '<tr><th>Ticker</th><th>Name</th><th>Price</th><th>Day %</th><th>Chart</th><th></th></tr>', unsafe_allow_html=True)
+            for idx, row in watchlist_df.iterrows():
+                color_class = get_row_class(row)
+                price_disp = (
+                    f"${row['Current Price']:.2f}" if isinstance(row['Current Price'], (int, float)) else "N/A"
+                )
+                change_pct_disp = (
+                    f"{row['Change %']:+.2f}%" if isinstance(row['Change %'], (int, float)) else "N/A"
+                )
+                chart_btn_key = f"show_chart_{row['Ticker']}"
+                remove_key = f"remove_{row['Ticker']}"
+                chart_clicked = st.button("📈 Chart", key=chart_btn_key)
+                remove_clicked = st.button("✖", key=remove_key)
+                # Render row
+                st.markdown(
+                    f"""<table style="width:100%;border:none;"><tr>
+                        <td style="width:13%;"><b>{row['Ticker']}</b></td>
+                        <td style="width:28%;">{row['Name']}</td>
+                        <td class="{color_class}" style="width:15%;">{price_disp}</td>
+                        <td class="{color_class}" style="width:14%;">{change_pct_disp}</td>
+                        <td style="width:13%;">{"📈" if chart_clicked else ""}</td>
+                        <td style="width:10%;">{"✖" if remove_clicked else ""}</td>
+                        </tr></table>""", unsafe_allow_html=True)
+                # Handle chart button
+                if chart_clicked:
+                    st.session_state["input_ticker"] = row['Ticker']
+                    st.session_state["selected_ticker"] = row['Ticker']
+                    st.rerun()
+                # Handle remove button
+                if remove_clicked:
+                    remove_from_watchlist(row['Ticker'])
+                    st.success(f"{row['Ticker']} removed from watchlist!")
+                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Your watchlist is empty. Add stocks from below!")
+
+        st.markdown("---")
+        st.header("⚙️ Configuration")
         ticker = st.text_input(
             "📊 Stock Ticker", 
-            value="AAPL", 
+            value=st.session_state.get("selected_ticker", "AAPL"), 
             help="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)",
-            max_chars=10
+            max_chars=10,
+            key="input_ticker"
         ).upper().strip()
-        
-        # Validate ticker format
         if ticker and not ticker.replace('-', '').replace('.', '').isalnum():
             st.warning("⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)")
             ticker = ""
-        
-        # Time period selection
+        if ticker:
+            if ticker not in current_watchlist:
+                if st.button("⭐ Add to Watchlist"):
+                    add_to_watchlist(ticker)
+                    st.success(f"{ticker} added to watchlist!")
+                    st.rerun()
+            else:
+                if st.button("✖ Remove from Watchlist"):
+                    remove_from_watchlist(ticker)
+                    st.success(f"{ticker} removed from watchlist!")
+                    st.rerun()
         period_options = {
             "1 Day": "1d",
             "5 Days": "5d", 
@@ -449,99 +523,77 @@ def main():
         }
         selected_period = st.selectbox("📅 Time Period", list(period_options.keys()), index=6)
         period = period_options[selected_period]
-        
-        # Auto-refresh toggle
         auto_refresh = st.checkbox("🔄 Auto Refresh (30s)", value=False)
-        
-        # Refresh button
         if st.button("🔄 Refresh Now"):
             st.cache_data.clear()
             st.cache_resource.clear()
-    
+
+    query_params = st.query_params
+    selected_ticker_param = query_params.get("selected_ticker", [None])[0] if "selected_ticker" in query_params else None
+    if selected_ticker_param:
+        st.session_state["input_ticker"] = selected_ticker_param
+        ticker = selected_ticker_param
+
     if not ticker:
         st.warning("Please enter a stock ticker symbol")
         return
-    
-    # Auto-refresh implementation using session state
+
     if auto_refresh:
         if 'last_refresh' not in st.session_state:
             st.session_state.last_refresh = time.time()
-        
         current_time = time.time()
         if current_time - st.session_state.last_refresh >= 30:
             st.session_state.last_refresh = current_time
             st.cache_data.clear()
             st.rerun()
-    
+
     try:
-        # Get stock information
         with st.spinner(f"📈 Loading data for {ticker}..."):
             stock = get_stock_info(ticker)
             if not stock:
                 return
-            
-            # Get historical data
             historical_data = stock.history(period=period)
             if historical_data.empty:
                 st.error("No data available for this ticker")
                 return
-            
-            # Calculate technical indicators
             historical_data = calculate_technical_indicators(historical_data)
-            
-            # Get real-time intraday data
             real_time_data = get_real_time_data(ticker)
-        
-        # Company header
         company_name = stock.info.get('longName', ticker)
         sector = stock.info.get('sector', 'N/A')
         st.subheader(f"📈 {company_name} ({ticker})")
         st.caption(f"Sector: {sector}")
-        
-        # Real-time metrics
         st.header("📊 Real-Time Overview")
         if not real_time_data.empty:
             display_real_time_metrics(stock, real_time_data)
         else:
             st.warning("Real-time data not available, showing latest market data")
             display_real_time_metrics(stock, historical_data.tail(1))
-        
-        # Main charts section
         st.header("📈 Advanced Charts")
-        
         chart_tabs = st.tabs([
             "📊 Price & Volume", 
             "🔬 Technical Indicators", 
             "📦 Volume Analysis",
             "📋 Financial Overview"
         ])
-        
         with chart_tabs[0]:
             st.subheader("Price Action & Volume")
             if not real_time_data.empty:
-                # Show intraday chart for current day
                 intraday_chart = create_advanced_candlestick_chart(
                     real_time_data, f"{ticker} - Intraday (1-minute intervals)"
                 )
                 st.plotly_chart(intraday_chart, use_container_width=True)
-            
-            # Historical chart
             historical_chart = create_advanced_candlestick_chart(
                 historical_data, f"{ticker} - Historical ({selected_period})"
             )
             st.plotly_chart(historical_chart, use_container_width=True)
-        
         with chart_tabs[1]:
             st.subheader("Technical Indicators Dashboard")
             tech_chart = create_technical_indicators_chart(historical_data)
             st.plotly_chart(tech_chart, use_container_width=True)
-            
-            # Technical analysis summary
             if 'RSI' in historical_data.columns and not historical_data['RSI'].empty:
                 latest_rsi = historical_data['RSI'].iloc[-1]
                 latest_macd = historical_data['MACD'].iloc[-1]
                 latest_signal = historical_data['MACD_Signal'].iloc[-1]
-                
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     if not pd.isna(latest_rsi):
@@ -549,14 +601,12 @@ def main():
                         st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
                     else:
                         st.metric("RSI (14)", "N/A", "Insufficient data")
-                
                 with col2:
                     if not pd.isna(latest_macd) and not pd.isna(latest_signal):
                         macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
                         st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
                     else:
                         st.metric("MACD Signal", "N/A", "Insufficient data")
-                
                 with col3:
                     if 'ATR' in historical_data.columns and not historical_data['ATR'].empty:
                         latest_atr = historical_data['ATR'].iloc[-1]
@@ -564,18 +614,13 @@ def main():
                             st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
                         else:
                             st.metric("ATR (14)", "N/A", "Insufficient data")
-        
         with chart_tabs[2]:
             st.subheader("Volume Analysis")
             volume_chart = create_volume_analysis_chart(historical_data)
             st.plotly_chart(volume_chart, use_container_width=True)
-        
         with chart_tabs[3]:
             st.subheader("Financial Overview")
-            
-            # Key financial metrics
             info = stock.info
-            
             col1, col2, col3, col4 = st.columns(4)
             metrics = [
                 ("Market Cap", info.get('marketCap', 0), "B", 1e9),
@@ -587,7 +632,6 @@ def main():
                 ("Debt/Equity", info.get('debtToEquity', 0), "", 1),
                 ("Beta", info.get('beta', 0), "", 1)
             ]
-            
             for i, (label, value, suffix, divisor) in enumerate(metrics):
                 col = [col1, col2, col3, col4][i % 4]
                 with col:
@@ -596,59 +640,43 @@ def main():
                     else:
                         formatted_value = "N/A"
                     st.metric(label, formatted_value)
-        
-        # Additional information sections
         if st.expander("📰 Recent News", expanded=False):
             news = stock.news
             if news:
                 valid_news_count = 0
                 for item in news:
-                    # Only show news items with valid titles
                     title = item.get('title', '').strip()
                     if title and title != 'No title' and valid_news_count < 5:
                         st.markdown(f"**{title}**")
-                        
-                        # Add publication info if available
                         if 'providerPublishTime' in item:
                             try:
                                 publish_time = datetime.fromtimestamp(item['providerPublishTime'])
                                 publisher = item.get('publisher', 'Unknown')
                                 st.caption(f"📅 {publish_time.strftime('%Y-%m-%d %H:%M')} | 🏢 {publisher}")
                             except (ValueError, OSError):
-                                # Handle invalid timestamp
                                 st.caption(f"🏢 {item.get('publisher', 'Unknown')}")
-                        
-                        # Add link if available
                         if 'link' in item and item['link']:
                             st.markdown(f"[Read more]({item['link']})")
-                        
                         st.divider()
                         valid_news_count += 1
-                
                 if valid_news_count == 0:
                     st.info("No recent news with valid titles available")
             else:
                 st.info("No recent news available")
-        
         if st.expander("🏢 Company Information", expanded=False):
             st.write(info.get('longBusinessSummary', 'No company information available.'))
-            
             col1, col2 = st.columns(2)
             with col1:
                 st.write(f"**Industry:** {info.get('industry', 'N/A')}")
                 st.write(f"**Employees:** {info.get('fullTimeEmployees', 'N/A'):,}")
                 st.write(f"**Founded:** {info.get('startDate', 'N/A')}")
-            
             with col2:
                 st.write(f"**Website:** {info.get('website', 'N/A')}")
                 st.write(f"**Country:** {info.get('country', 'N/A')}")
                 st.write(f"**Currency:** {info.get('currency', 'N/A')}")
-    
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         st.info("Please check the ticker symbol and try again.")
-        
-        # Show helpful suggestions for common errors
         if "No data found" in str(e) or "Invalid ticker" in str(e):
             st.info("💡 **Tips:**")
             st.info("• Make sure the ticker symbol is correct (e.g., AAPL, GOOGL, TSLA)")
