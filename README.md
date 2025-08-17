@@ -82,7 +82,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 git clone https://github.com/yourusername/stockgpt.git
-cd stockgpt
+cd ssgpt
 ```
 
 ### 3️⃣ Create and Activate Virtual Environment
