@@ -416,6 +416,26 @@ def display_real_time_metrics(stock_info, current_data):
         </div>
         """, unsafe_allow_html=True)
 
+
+def stock_heatmap_chart(tickers):
+    data = yf.download(tickers, period="5d")['Close']
+    pct_change = data.pct_change().iloc[-1] * 100
+
+    heatmap_df = pd.DataFrame({
+        'Stock': pct_change.index,
+        'Change (%)': pct_change.values
+    })
+
+    fig = px.imshow(
+        [heatmap_df['Change (%)'].values],
+        labels=dict(x="Stock", y="", color="Change (%)"),
+        x=heatmap_df['Stock'],
+        y=["Performance"],
+        color_continuous_scale='RdYlGn'
+    )
+    fig.update_layout(title="Stock Market Heatmap")
+    return fig
+
 def main():
     st.title("🚀 Advanced Real-Time Stock Analyzer")
     st.markdown("*Professional-grade stock analysis with real-time updates and advanced technical indicators*")
@@ -513,7 +533,8 @@ def main():
             "📊 Price & Volume", 
             "🔬 Technical Indicators", 
             "📦 Volume Analysis",
-            "📋 Financial Overview"
+            "📋 Financial Overview",
+            "🌡️ Market Heatmap"
         ])
         
         with chart_tabs[0]:
@@ -587,7 +608,7 @@ def main():
                 ("Debt/Equity", info.get('debtToEquity', 0), "", 1),
                 ("Beta", info.get('beta', 0), "", 1)
             ]
-            
+
             for i, (label, value, suffix, divisor) in enumerate(metrics):
                 col = [col1, col2, col3, col4][i % 4]
                 with col:
@@ -596,6 +617,27 @@ def main():
                     else:
                         formatted_value = "N/A"
                     st.metric(label, formatted_value)
+
+        with chart_tabs[4]:  # Market Heatmap tab
+            st.subheader("Stock Market Heatmap")
+
+             # Default list of tickers
+            default_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "FB", "NFLX", "NVDA"]
+
+             # User selects tickers
+            selected_tickers = st.multiselect(
+               "Select stocks to include in heatmap",
+                options=default_tickers,
+                default=default_tickers
+             )
+
+            if selected_tickers:
+                heatmap_fig = stock_heatmap_chart(selected_tickers)
+                st.plotly_chart(heatmap_fig, use_container_width=True)
+            else:
+                st.info("Please select at least one stock to display the heatmap.")
+    
+
         
         # Additional information sections
         if st.expander("📰 Recent News", expanded=False):
