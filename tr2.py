@@ -8,6 +8,211 @@ from datetime import datetime, timedelta
 import time
 import numpy as np
 import requests
+import plotly.io as pio
+
+# Custom Plotly templates for light/dark modes
+_light_plotly_template = go.layout.Template(
+    layout=dict(
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font=dict(color="#0b1220"),
+        legend=dict(font=dict(color="#0b1220")),
+        xaxis=dict(title=dict(font=dict(color="#0b1220")), tickfont=dict(color="#0b1220")),
+        yaxis=dict(title=dict(font=dict(color="#0b1220")), tickfont=dict(color="#0b1220"))
+    )
+)
+
+_dark_plotly_template = go.layout.Template(
+    layout=dict(
+        paper_bgcolor="#0e1117",
+        plot_bgcolor="#0e1117",
+        font=dict(color="#e6eef8"),
+        legend=dict(font=dict(color="#e6eef8")),
+        xaxis=dict(title=dict(font=dict(color="#e6eef8")), tickfont=dict(color="#e6eef8")),
+        yaxis=dict(title=dict(font=dict(color="#e6eef8")), tickfont=dict(color="#e6eef8"))
+    )
+)
+
+pio.templates["custom_light"] = _light_plotly_template
+pio.templates["custom_dark"] = _dark_plotly_template
+
+# Light/dark mode CSS definitions
+_light_css = """
+    <style>
+    /* Light theme - comprehensive styling */
+    .stApp, .main, [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+        color: #0b1220 !important;
+    }
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] > div {
+        background-color: #f7f9fb !important;
+        color: #0b1220 !important;
+    }
+
+    /* All text elements */
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
+    .stMarkdown h4, .stMarkdown h5, .stMarkdown h6,
+    .stMarkdown p, .stText, label, span, .stCaption,
+    [data-testid="stSidebar"] * {
+        color: #0b1220 !important;
+    }
+
+    /* Metric containers */
+    .metric-container {
+        background: #ffffff !important;
+        border: 1px solid #e0e0e0 !important;
+        color: #0b1220 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Inputs and controls */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div,
+    .stRadio > label,
+    .stCheckbox > label {
+        background-color: #ffffff !important;
+        color: #0b1220 !important;
+        border: 1px solid #dcdcdc !important;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        background-color: #ffffff !important;
+        color: #0b1220 !important;
+        border: 1px solid #dcdcdc !important;
+    }
+    .stButton > button:hover {
+        background-color: #f1f5f9 !important;
+    }
+
+    /* Alerts and messages */
+    .stSuccess, .stError, .stWarning, .stInfo {
+        color: #0b1220 !important;
+        border: 1px solid rgba(0,0,0,0.1) !important;
+    }
+
+    /* Links */
+    a { color: #0a66ff !important; }
+
+    /* Plotly container background */
+    .plotly-graph-div .main-svg { 
+        background-color: #ffffff !important; 
+    }
+        /* Tab styling for light mode */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #f8f9fa !important;
+        border-radius: 4px !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        color: #0b1220 !important;
+        background-color: transparent !important;
+    }
+
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        color: #0a66ff !important;
+        background-color: #ffffff !important;
+        border-radius: 4px !important;
+        border-bottom: 2px solid #0a66ff !important;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #0a66ff !important;
+        background-color: #f1f5f9 !important;
+    }
+    </style>
+"""
+
+_dark_css = """
+    <style>
+    /* Dark theme styling */
+    .stApp, .main, [data-testid="stAppViewContainer"] {
+        background-color: #0e1117 !important;
+        color: #e6eef8 !important;
+    }
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] > div {
+        background-color: #262730 !important;
+        color: #e6eef8 !important;
+    }
+
+    /* All text elements */
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
+    .stMarkdown h4, .stMarkdown h5, .stMarkdown h6,
+    .stMarkdown p, .stText, label, span, .stCaption,
+    [data-testid="stSidebar"] * {
+        color: #e6eef8 !important;
+    }
+
+    /* Metric containers */
+    .metric-container {
+        background: linear-gradient(135deg, #1e2130, #262730) !important;
+        border: 1px solid #404040 !important;
+        color: #e6eef8 !important;
+    }
+
+    /* Inputs and controls */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div,
+    .stRadio > label,
+    .stCheckbox > label {
+        background-color: #262730 !important;
+        color: #e6eef8 !important;
+        border: 1px solid #404040 !important;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        background-color: #262730 !important;
+        color: #e6eef8 !important;
+        border: 1px solid #404040 !important;
+    }
+    .stButton > button:hover {
+        background-color: #3a3b4a !important;
+    }
+
+    /* Alerts and messages */
+    .stSuccess, .stError, .stWarning, .stInfo {
+        color: #e6eef8 !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+    }
+
+    /* Links */
+    a { color: #7fb4ff !important; }
+
+    /* Plotly container background */
+    .plotly-graph-div .main-svg { 
+        background-color: #0e1117 !important; 
+    }
+    /* Tab styling for dark mode */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #1e2130 !important;
+        border-radius: 4px !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        color: #e6eef8 !important;
+        background-color: transparent !important;
+    }
+
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        color: #7fb4ff !important;
+        background-color: #262730 !important;
+        border-radius: 4px !important;
+        border-bottom: 2px solid #7fb4ff !important;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        color: #7fb4ff !important;
+        background-color: #2d303e !important;
+    }
+    </style>
+"""
 
 # ==========================
 # Company Name/Ticker Search (Autocomplete Feature)
@@ -141,9 +346,12 @@ def display_watchlist(selected_ticker_callback=None):
             st.markdown("")
         with cols[2]:
             if st.button("❌", key=f"rm_{ticker}"):
+                current_mode = st.session_state.get("dark_mode", False)
+                current_tab = st.session_state.get("active_tab", 0)
                 remove_from_watchlist(ticker)
-                st.experimental_rerun()
-
+                st.session_state["dark_mode"] = current_mode
+                st.session_state["active_tab"] = current_tab
+                st.rerun()
 # ==========================
 # Configure page
 # ==========================
@@ -154,33 +362,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better UI
-st.markdown("""
-<style>
-    .metric-container {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
-    }
-    .positive { color: #00C851; }
-    .negative { color: #ff4444; }
-    .neutral { color: #33b5e5; }
-    .real-time-indicator {
-        background-color: #4CAF50;
-        color: white;
-        padding: 0.25rem 0.5rem;
-        border-radius: 1rem;
-        font-size: 0.8rem;
-        animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-    }
-</style>
-""", unsafe_allow_html=True)
 
 @st.cache_resource(ttl=300)  # Cache for 5 minutes
 def get_stock_info(ticker):
@@ -326,7 +507,7 @@ def create_advanced_candlestick_chart(data, title="Stock Price"):
         title=title,
         yaxis_title="Price ($)",
         xaxis_rangeslider_visible=False,
-        template="plotly_white",
+        template=pio.templates.default,
         height=600,
         showlegend=True
     )
@@ -354,6 +535,7 @@ def create_technical_indicators_chart(data):
         go.Scatter(x=data.index, y=data['RSI'], name='RSI', line=dict(color='purple')),
         row=1, col=1
     )
+    
     fig.add_hline(y=70, line_dash="dash", line_color="red", row=1, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="green", row=1, col=1)
     fig.add_hline(y=50, line_dash="dot", line_color="gray", row=1, col=1)
@@ -399,14 +581,14 @@ def create_technical_indicators_chart(data):
         row=4, col=1
     )
     fig.add_trace(
-        go.Scatter(x=data.index, y=data['Close'], name='Close Price', line=dict(color='black')),
+        go.Scatter(x=data.index, y=data['Close'], name='Close Price'),
         row=4, col=1
     )
     
     # Update layout
     fig.update_layout(
         title="Technical Indicators Dashboard",
-        template="plotly_white",
+        template=pio.templates.default,
         height=800,
         showlegend=True
     )
@@ -470,7 +652,7 @@ def create_volume_analysis_chart(data):
     
     fig.update_layout(
         title="Volume Analysis",
-        template="plotly_white",
+        template=pio.templates.default,
         height=500
     )
     
@@ -554,7 +736,6 @@ def display_real_time_metrics(stock_info, current_data):
         </div>
         """, unsafe_allow_html=True)
 
-
 def stock_heatmap_chart(tickers):
     data = yf.download(tickers, period="5d")['Close']
     pct_change = data.pct_change().iloc[-1] * 100
@@ -577,6 +758,11 @@ def stock_heatmap_chart(tickers):
 def main():
     st.title("🚀 Advanced Real-Time Stock Analyzer")
     st.markdown("*Professional-grade stock analysis with real-time updates and advanced technical indicators*")
+
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = 0
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
     
     # --- Portfolio Tracker Sidebar ---
     def set_selected_ticker(ticker):
@@ -588,14 +774,28 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
         
-        # Stock ticker autocomplete input (NEW FEATURE)
+        # Initialize dark_mode in session_state if it doesn't exist
+        if "dark_mode" not in st.session_state:
+            st.session_state.dark_mode = False
+        dark_mode = st.checkbox("🌙 Dark mode", 
+                              key="dark_mode", 
+                              value=st.session_state.get("dark_mode", False),
+                              help="Toggle UI dark theme")
+        
+         # Apply theme CSS and Plotly template based on dark_mode
+        if dark_mode:
+            st.markdown(_dark_css, unsafe_allow_html=True)
+            pio.templates.default = "custom_dark"
+        else:
+            st.markdown(_light_css, unsafe_allow_html=True)
+            pio.templates.default = "custom_light"
+        # Stock ticker autocomplete input
         ticker = ticker_autocomplete_input(
             "🔍 Search Stock (Name or Ticker)", 
             key="autocomplete", 
             default=st.session_state.get("selected_ticker", "AAPL"), 
             help="Start typing a company name or ticker symbol (e.g., Apple, Microsoft, TSLA)"
         )
-
         # Validate ticker format
         if ticker and not ticker.replace('-', '').replace('.', '').isalnum():
             st.warning("⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)")
@@ -626,7 +826,7 @@ def main():
         if st.button("🔄 Refresh Now"):
             st.cache_data.clear()
             st.cache_resource.clear()
-    
+
     # If ticker in session_state due to sidebar selection, override
     if "selected_ticker" in st.session_state and st.session_state["selected_ticker"]:
         ticker = st.session_state.pop("selected_ticker")
@@ -682,107 +882,110 @@ def main():
         # Main charts section
         st.header("📈 Advanced Charts")
         
-        chart_tabs = st.tabs([
-            "📊 Price & Volume", 
-            "🔬 Technical Indicators", 
-            "📦 Volume Analysis",
-            "📋 Financial Overview",
-            "🌡️ Market Heatmap"
-        ])
+        tab_names = [
+        "📊 Price & Volume", 
+        "🔬 Technical Indicators", 
+        "📦 Volume Analysis",
+        "📋 Financial Overview",
+        "🌡️ Market Heatmap"
+        ]
+        chart_tabs = st.tabs(tab_names)
         
-        with chart_tabs[0]:
-            st.subheader("Price Action & Volume")
-            if not real_time_data.empty:
-                # Show intraday chart for current day
-                intraday_chart = create_advanced_candlestick_chart(
-                    real_time_data, f"{ticker} - Intraday (1-minute intervals)"
+        try:
+            with chart_tabs[0]:
+                st.subheader("Price Action & Volume")
+                if not real_time_data.empty:
+                    intraday_chart = create_advanced_candlestick_chart(
+                        real_time_data, f"{ticker} - Intraday (1-minute intervals)"
+                    )
+                    st.plotly_chart(intraday_chart, use_container_width=True)
+                historical_chart = create_advanced_candlestick_chart(
+                    historical_data, f"{ticker} - Historical ({selected_period})"
                 )
-                st.plotly_chart(intraday_chart, use_container_width=True)
-            
-            # Historical chart
-            historical_chart = create_advanced_candlestick_chart(
-                historical_data, f"{ticker} - Historical ({selected_period})"
-            )
-            st.plotly_chart(historical_chart, use_container_width=True)
-        
-        with chart_tabs[1]:
-            st.subheader("Technical Indicators Dashboard")
-            tech_chart = create_technical_indicators_chart(historical_data)
-            st.plotly_chart(tech_chart, use_container_width=True)
-            
-            # Technical analysis summary
-            if 'RSI' in historical_data.columns and not historical_data['RSI'].empty:
-                latest_rsi = historical_data['RSI'].iloc[-1]
-                latest_macd = historical_data['MACD'].iloc[-1]
-                latest_signal = historical_data['MACD_Signal'].iloc[-1]
+                st.plotly_chart(historical_chart, use_container_width=True)
                 
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    if not pd.isna(latest_rsi):
-                        rsi_signal = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
-                        st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
-                    else:
-                        st.metric("RSI (14)", "N/A", "Insufficient data")
+            with chart_tabs[1]:
+                st.subheader("Technical Indicators Dashboard")
+                tech_chart = create_technical_indicators_chart(historical_data)
+                st.plotly_chart(tech_chart, use_container_width=True)
                 
-                with col2:
-                    if not pd.isna(latest_macd) and not pd.isna(latest_signal):
-                        macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
-                        st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
-                    else:
-                        st.metric("MACD Signal", "N/A", "Insufficient data")
-                
-                with col3:
-                    if 'ATR' in historical_data.columns and not historical_data['ATR'].empty:
-                        latest_atr = historical_data['ATR'].iloc[-1]
-                        if not pd.isna(latest_atr):
-                            st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
+                # Technical analysis summary
+                if 'RSI' in historical_data.columns and not historical_data['RSI'].empty:
+                    latest_rsi = historical_data['RSI'].iloc[-1]
+                    latest_macd = historical_data['MACD'].iloc[-1]
+                    latest_signal = historical_data['MACD_Signal'].iloc[-1]
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if not pd.isna(latest_rsi):
+                            rsi_signal = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
+                            st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
                         else:
-                            st.metric("ATR (14)", "N/A", "Insufficient data")
-        
-        with chart_tabs[2]:
-            st.subheader("Volume Analysis")
-            volume_chart = create_volume_analysis_chart(historical_data)
-            st.plotly_chart(volume_chart, use_container_width=True)
-        
-        with chart_tabs[3]:
-            st.subheader("Financial Overview")
+                            st.metric("RSI (14)", "N/A", "Insufficient data")
+                    
+                    with col2:
+                        if not pd.isna(latest_macd) and not pd.isna(latest_signal):
+                            macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
+                            st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
+                        else:
+                            st.metric("MACD Signal", "N/A", "Insufficient data")
+                    
+                    with col3:
+                        if 'ATR' in historical_data.columns and not historical_data['ATR'].empty:
+                            latest_atr = historical_data['ATR'].iloc[-1]
+                            if not pd.isna(latest_atr):
+                                st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
+                            else:
+                                st.metric("ATR (14)", "N/A", "Insufficient data")
             
-            # Key financial metrics
-            info = stock.info
-            
-            col1, col2, col3, col4 = st.columns(4)
-            metrics = [
-                ("Market Cap", info.get('marketCap', 0), "B", 1e9),
-                ("Revenue", info.get('totalRevenue', 0), "B", 1e9),
-                ("P/E Ratio", info.get('trailingPE', 0), "", 1),
-                ("Dividend Yield", info.get('dividendYield', 0), "%", 100),
-                ("ROE", info.get('returnOnEquity', 0), "%", 100),
-                ("Profit Margin", info.get('profitMargins', 0), "%", 100),
-                ("Debt/Equity", info.get('debtToEquity', 0), "", 1),
-                ("Beta", info.get('beta', 0), "", 1)
-            ]
+            with chart_tabs[2]:
+                st.subheader("Volume Analysis")
+                volume_chart = create_volume_analysis_chart(historical_data)
+                st.plotly_chart(volume_chart, use_container_width=True)
+        
+            with chart_tabs[3]:
+                st.subheader("Financial Overview")
+                
+                # Key financial metrics
+                info = stock.info
+                
+                col1, col2, col3, col4 = st.columns(4)
+                metrics = [
+                    ("Market Cap", info.get('marketCap', 0), "B", 1e9),
+                    ("Revenue", info.get('totalRevenue', 0), "B", 1e9),
+                    ("P/E Ratio", info.get('trailingPE', 0), "", 1),
+                    ("Dividend Yield", info.get('dividendYield', 0), "%", 100),
+                    ("ROE", info.get('returnOnEquity', 0), "%", 100),
+                    ("Profit Margin", info.get('profitMargins', 0), "%", 100),
+                    ("Debt/Equity", info.get('debtToEquity', 0), "", 1),
+                    ("Beta", info.get('beta', 0), "", 1)
+                ]
 
-            for i, (label, value, suffix, divisor) in enumerate(metrics):
-                col = [col1, col2, col3, col4][i % 4]
-                with col:
-                    if isinstance(value, (int, float)) and value != 0:
-                        formatted_value = f"{value/divisor:.2f}{suffix}" if divisor > 1 else f"{value:.2f}{suffix}"
-                    else:
-                        formatted_value = "N/A"
-                    st.metric(label, formatted_value)
+                for i, (label, value, suffix, divisor) in enumerate(metrics):
+                    col = [col1, col2, col3, col4][i % 4]
+                    with col:
+                        if isinstance(value, (int, float)) and value != 0:
+                            formatted_value = f"{value/divisor:.2f}{suffix}" if divisor > 1 else f"{value:.2f}{suffix}"
+                        else:
+                            formatted_value = "N/A"
+                        st.metric(label, formatted_value)
 
-        with chart_tabs[4]:  # Market Heatmap tab
-            st.subheader("Stock Market Heatmap")
+            with chart_tabs[4]:  # Market Heatmap tab
+                st.subheader("Stock Market Heatmap")
 
-             # Default list of tickers
-            default_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "FB", "NFLX", "NVDA"]
+                # Default list of tickers
+                default_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "FB", "NFLX", "NVDA"]
 
-             # User selects tickers
-            selected_tickers = st.multiselect(
-               "Select stocks to include in heatmap",
+                # User selects tickers
+                selected_tickers = st.multiselect(
+                "Select stocks to include in heatmap",
                 options=default_tickers,
                 default=default_tickers
-             )
+                )
+            
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+            st.info("Please check the ticker symbol and try again.")
 
             if selected_tickers:
                 heatmap_fig = stock_heatmap_chart(selected_tickers)
