@@ -16,20 +16,72 @@ _light_plotly_template = go.layout.Template(
         paper_bgcolor="#ffffff",
         plot_bgcolor="#ffffff",
         font=dict(color="#0b1220"),
-        legend=dict(font=dict(color="#0b1220")),
-        xaxis=dict(title=dict(font=dict(color="#0b1220")), tickfont=dict(color="#0b1220")),
-        yaxis=dict(title=dict(font=dict(color="#0b1220")), tickfont=dict(color="#0b1220"))
+        legend=dict(
+            font=dict(color="#0b1220"),
+            bgcolor="#ffffff",
+            bordercolor="#e5e7eb",
+            borderwidth=1
+        ),
+        xaxis=dict(
+            title=dict(font=dict(color="#0b1220")),
+            tickfont=dict(color="#0b1220"),
+            gridcolor="#e5e7eb",
+            linecolor="#cbd5e1",
+            zerolinecolor="#e5e7eb"
+        ),
+        yaxis=dict(
+            title=dict(font=dict(color="#0b1220")),
+            tickfont=dict(color="#0b1220"),
+            gridcolor="#e5e7eb",
+            linecolor="#cbd5e1",
+            zerolinecolor="#e5e7eb"
+        ),
+        hoverlabel=dict(
+            bgcolor="#f8fafc",
+            bordercolor="#cbd5e1",
+            font=dict(color="#0b1220")
+        ),
+        colorway=[
+            "#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0ea5e9", "#16a34a", "#f59e0b"
+        ],
+        margin=dict(l=60, r=20, t=60, b=50)
     )
 )
 
 _dark_plotly_template = go.layout.Template(
     layout=dict(
-        paper_bgcolor="#0e1117",
-        plot_bgcolor="#0e1117",
+        paper_bgcolor="#0b1220",
+        plot_bgcolor="#0b1220",
         font=dict(color="#e6eef8"),
-        legend=dict(font=dict(color="#e6eef8")),
-        xaxis=dict(title=dict(font=dict(color="#e6eef8")), tickfont=dict(color="#e6eef8")),
-        yaxis=dict(title=dict(font=dict(color="#e6eef8")), tickfont=dict(color="#e6eef8"))
+        legend=dict(
+            font=dict(color="#e6eef8"),
+            bgcolor="#0b1220",
+            bordercolor="#2b2f3a",
+            borderwidth=1
+        ),
+        xaxis=dict(
+            title=dict(font=dict(color="#e6eef8")),
+            tickfont=dict(color="#e6eef8"),
+            gridcolor="#243041",
+            linecolor="#2b2f3a",
+            zerolinecolor="#243041"
+        ),
+        yaxis=dict(
+            title=dict(font=dict(color="#e6eef8")),
+            tickfont=dict(color="#e6eef8"),
+            gridcolor="#243041",
+            linecolor="#2b2f3a",
+            zerolinecolor="#243041"
+        ),
+        hoverlabel=dict(
+            bgcolor="#0f172a",
+            bordercolor="#2b2f3a",
+            font=dict(color="#e6eef8")
+        ),
+        colorway=[
+            "#60a5fa", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#38bdf8", "#22c55e", "#f59e0b"
+        ],
+        margin=dict(l=60, r=20, t=60, b=50)
     )
 )
 
@@ -41,14 +93,37 @@ _light_css = """
     <style>
     /* Light theme - comprehensive styling */
     .stApp, .main, [data-testid="stAppViewContainer"] {
-        background-color: #ffffff !important;
+        background-color: #f8fafc !important;
         color: #0b1220 !important;
+        transition: background-color 0.3s ease, color 0.3s ease;
     }
+    /* Critical metric variant (e.g., Current Price) */
+    .metric-container.metric-critical {
+        background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%) !important;
+        border-left-color: #1d4ed8 !important;
+    }
+    /* Directional variants for critical metrics (light) */
+    .metric-container.metric-critical.price-up {
+        background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%) !important;
+        border-left-color: #059669 !important;
+    }
+    .metric-container.metric-critical.price-down {
+        background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%) !important;
+        border-left-color: #dc2626 !important;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes tickFlash { 0% { background-color: rgba(37,99,235,0.15);} 100% { background-color: transparent; } }
+    .fade-in { animation: fadeInUp 300ms ease-out; }
+    .value-animate { animation: tickFlash 600ms ease-out; border-radius: 6px; display: inline-block; padding: 0.05rem 0.25rem; }
 
     /* Sidebar styling */
     [data-testid="stSidebar"] > div {
         background-color: #f7f9fb !important;
         color: #0b1220 !important;
+        border-right: 1px solid #e5e7eb !important;
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     }
 
     /* All text elements */
@@ -59,13 +134,76 @@ _light_css = """
         color: #0b1220 !important;
     }
 
-    /* Metric containers */
+    /* Enhanced Metric containers */
     .metric-container {
         background: #ffffff !important;
-        border: 1px solid #e0e0e0 !important;
+        border: none !important;
+        border-radius: 12px !important;
         color: #0b1220 !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        padding: 1.5rem !important;
+        transition: all 0.3s ease, transform 0.2s ease !important;
+        border-left: 4px solid #3b82f6 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 220px !important; /* uniform card height */
     }
+    
+    .metric-container:hover {
+        transform: translateY(-4px) !important;
+        box-shadow: 0 16px 24px -6px rgba(0, 0, 0, 0.12), 0 8px 12px -6px rgba(0, 0, 0, 0.08) !important;
+        outline: 1px solid #e5e7eb !important;
+    }
+    .metric-container:hover .metric-value {
+        transform: scale(1.03);
+        transition: transform 0.15s ease;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem !important;
+        color: #64748b !important;
+        font-weight: 500 !important;
+        margin-bottom: 0.5rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+    }
+    
+    .metric-value {
+        font-size: 1.75rem !important;
+        font-weight: 700 !important;
+        margin: 0.25rem 0 !important;
+        color: #0f172a !important;
+    }
+    
+    .metric-change {
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        padding: 0.25rem 0.5rem !important;
+        border-radius: 9999px !important;
+    }
+    
+    .positive-change {
+        background-color: #ecfdf5 !important;
+        color: #059669 !important;
+    }
+    
+    .negative-change {
+        background-color: #fef2f2 !important;
+        color: #dc2626 !important;
+    }
+
+    /* Secondary/muted text */
+    .muted-text {
+        color: #64748b !important;
+    }
+
+    /* Consistent typography */
+    h1, .stMarkdown h1 { font-weight: 800 !important; }
+    h2, .stMarkdown h2 { font-weight: 700 !important; }
+    h3, .stMarkdown h3 { font-weight: 600 !important; }
+    p, .stMarkdown p, span { line-height: 1.5 !important; }
 
     /* Inputs and controls */
     .stTextInput > div > div > input,
@@ -75,17 +213,36 @@ _light_css = """
     .stCheckbox > label {
         background-color: #ffffff !important;
         color: #0b1220 !important;
-        border: 1px solid #dcdcdc !important;
+        border: 1px solid #d1d5db !important;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    /* Focus states for inputs */
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div:focus-within,
+    .stMultiSelect > div > div:focus-within {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+        outline: none !important;
     }
 
     /* Buttons */
     .stButton > button {
-        background-color: #ffffff !important;
-        color: #0b1220 !important;
-        border: 1px solid #dcdcdc !important;
+        background-color: #2563eb !important; /* Primary blue with good contrast */
+        color: #ffffff !important;
+        border: 1px solid #1e40af !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+        transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
     }
     .stButton > button:hover {
-        background-color: #f1f5f9 !important;
+        background-color: #1d4ed8 !important;
+        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35) !important;
+        transform: translateY(-1px) !important;
+    }
+    .stButton > button:focus-visible {
+        outline: 3px solid rgba(37, 99, 235, 0.35) !important;
+        outline-offset: 2px !important;
     }
 
     /* Alerts and messages */
@@ -101,10 +258,12 @@ _light_css = """
     .plotly-graph-div .main-svg { 
         background-color: #ffffff !important; 
     }
-        /* Tab styling for light mode */
+    /* Tab styling for light mode */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: #f8f9fa !important;
+        background-color: #f8fafc !important;
         border-radius: 4px !important;
+        border: 1px solid #e5e7eb !important;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
     }
 
     .stTabs [data-baseweb="tab"] {
@@ -113,10 +272,11 @@ _light_css = """
     }
 
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        color: #0a66ff !important;
+        color: #1d4ed8 !important;
         background-color: #ffffff !important;
         border-radius: 4px !important;
-        border-bottom: 2px solid #0a66ff !important;
+        border-bottom: 2px solid #2563eb !important;
+        font-weight: 600 !important;
     }
 
     .stTabs [data-baseweb="tab"]:hover {
@@ -130,14 +290,17 @@ _dark_css = """
     <style>
     /* Dark theme styling */
     .stApp, .main, [data-testid="stAppViewContainer"] {
-        background-color: #0e1117 !important;
+        background-color: #0b1220 !important; /* slightly deeper to avoid flatness */
         color: #e6eef8 !important;
+        transition: background-color 0.3s ease, color 0.3s ease;
     }
 
     /* Sidebar styling */
     [data-testid="stSidebar"] > div {
-        background-color: #262730 !important;
+        background-color: #151923 !important;
         color: #e6eef8 !important;
+        border-right: 1px solid #2b2f3a !important;
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     }
 
     /* All text elements */
@@ -148,12 +311,79 @@ _dark_css = """
         color: #e6eef8 !important;
     }
 
-    /* Metric containers */
+    /* Enhanced Metric containers for dark mode */
     .metric-container {
-        background: linear-gradient(135deg, #1e2130, #262730) !important;
-        border: 1px solid #404040 !important;
+        background: linear-gradient(135deg, #122034, #0b1220) !important;
+        border: none !important;
+        border-radius: 12px !important;
         color: #e6eef8 !important;
+        box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.35), 0 2px 6px -1px rgba(0, 0, 0, 0.25) !important;
+        padding: 1.5rem !important;
+        transition: all 0.3s ease, transform 0.2s ease !important;
+        border-left: 4px solid #60a5fa !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 220px !important; /* uniform card height */
     }
+
+    /* Card body grows to fill space for equal heights */
+    .metric-body { flex: 1 1 auto !important; }
+    
+    .metric-container:hover {
+        transform: translateY(-4px) !important;
+        box-shadow: 0 18px 28px -8px rgba(0, 0, 0, 0.45), 0 8px 14px -8px rgba(0, 0, 0, 0.35) !important;
+        outline: 1px solid #2b2f3a !important;
+    }
+    .metric-container:hover .metric-value {
+        transform: scale(1.03);
+        transition: transform 0.15s ease;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem !important;
+        color: #94a3b8 !important;
+        font-weight: 500 !important;
+        margin-bottom: 0.5rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+    }
+    
+    .metric-value {
+        font-size: 1.75rem !important;
+        font-weight: 700 !important;
+        margin: 0.25rem 0 !important;
+        color: #f8fafc !important;
+    }
+    
+    .metric-change {
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        padding: 0.25rem 0.5rem !important;
+        border-radius: 9999px !important;
+    }
+    
+    .positive-change {
+        background-color: rgba(5, 150, 105, 0.15) !important;
+        color: #34d399 !important;
+    }
+    
+    .negative-change {
+        background-color: rgba(220, 38, 38, 0.15) !important;
+        color: #f87171 !important;
+    }
+
+    /* Secondary/muted text */
+    .muted-text {
+        color: #94a3b8 !important;
+    }
+
+    /* Consistent typography */
+    h1, .stMarkdown h1 { font-weight: 800 !important; }
+    h2, .stMarkdown h2 { font-weight: 700 !important; }
+    h3, .stMarkdown h3 { font-weight: 600 !important; }
+    p, .stMarkdown p, span { line-height: 1.5 !important; }
 
     /* Inputs and controls */
     .stTextInput > div > div > input,
@@ -161,19 +391,38 @@ _dark_css = """
     .stMultiSelect > div > div,
     .stRadio > label,
     .stCheckbox > label {
-        background-color: #262730 !important;
+        background-color: #1a1f2b !important;
         color: #e6eef8 !important;
-        border: 1px solid #404040 !important;
+        border: 1px solid #2f3542 !important;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    /* Focus states for inputs */
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div:focus-within,
+    .stMultiSelect > div > div:focus-within {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
+        outline: none !important;
     }
 
     /* Buttons */
     .stButton > button {
-        background-color: #262730 !important;
-        color: #e6eef8 !important;
-        border: 1px solid #404040 !important;
+        background-color: #3b82f6 !important; /* Primary blue for dark mode */
+        color: #ffffff !important;
+        border: 1px solid #1d4ed8 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 6px rgba(2, 6, 23, 0.6) !important;
+        transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
     }
     .stButton > button:hover {
-        background-color: #3a3b4a !important;
+        background-color: #2563eb !important;
+        box-shadow: 0 4px 10px rgba(2, 6, 23, 0.8) !important;
+        transform: translateY(-1px) !important;
+    }
+    .stButton > button:focus-visible {
+        outline: 3px solid rgba(96, 165, 250, 0.4) !important;
+        outline-offset: 2px !important;
     }
 
     /* Alerts and messages */
@@ -191,8 +440,10 @@ _dark_css = """
     }
     /* Tab styling for dark mode */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: #1e2130 !important;
+        background-color: #131a27 !important;
         border-radius: 4px !important;
+        border: 1px solid #2b2f3a !important;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
     }
 
     .stTabs [data-baseweb="tab"] {
@@ -201,10 +452,11 @@ _dark_css = """
     }
 
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        color: #7fb4ff !important;
-        background-color: #262730 !important;
+        color: #93c5fd !important;
+        background-color: #1a2333 !important;
         border-radius: 4px !important;
-        border-bottom: 2px solid #7fb4ff !important;
+        border-bottom: 2px solid #60a5fa !important;
+        font-weight: 600 !important;
     }
 
     .stTabs [data-baseweb="tab"]:hover {
@@ -659,7 +911,7 @@ def create_volume_analysis_chart(data):
     return fig
 
 def display_real_time_metrics(stock_info, current_data):
-    """Display real-time metrics in an attractive format"""
+    """Display real-time metrics in an attractive format with enhanced styling"""
     if current_data.empty:
         return
     
@@ -667,74 +919,137 @@ def display_real_time_metrics(stock_info, current_data):
     prev_close = stock_info.info.get('regularMarketPreviousClose', current_price)
     change = current_price - prev_close
     change_pct = (change / prev_close) * 100 if prev_close != 0 else 0
+    is_positive = change >= 0
+    now_str = datetime.now().strftime('%H:%M:%S')
     
-    # Real-time indicator
-    st.markdown('<span class="real-time-indicator">🔴 LIVE</span>', unsafe_allow_html=True)
+    # Real-time indicator with animation
+    st.markdown("""
+    <style>
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+    .real-time-indicator {
+        display: inline-block;
+        background: #dc2626;
+        color: white !important;
+        padding: 0.25rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        animation: pulse 2s infinite;
+    }
+    </style>
+    <div class="real-time-indicator">🔴 LIVE</div>
+    """, unsafe_allow_html=True)
     
-    col1, col2, col3, col4 = st.columns(4)
+    # Create columns with appropriate spacing
+    col1, col2, col3, col4 = st.columns(4, gap="medium")
     
+    # Helper function to format large numbers
+    def format_number(num):
+        if pd.isna(num):
+            return 'N/A'
+        if num >= 1e12:
+            return f'${num/1e12:.2f}T'
+        if num >= 1e9:
+            return f'${num/1e9:.2f}B'
+        if num >= 1e6:
+            return f'${num/1e6:.2f}M'
+        if num >= 1e3:
+            return f'${num/1e3:.1f}K'
+        return f'${num:,.2f}'
+    
+    # Current Price Card
     with col1:
-        color_class = "positive" if change >= 0 else "negative"
+        change_emoji = '▲' if is_positive else '▼'
+        change_class = 'positive-change' if is_positive else 'negative-change'
         st.markdown(f"""
-        <div class="metric-container">
-            <h3>Current Price</h3>
-            <h2 class="{color_class}">${current_price:.2f}</h2>
-            <p class="{color_class}">
-                {'▲' if change >= 0 else '▼'} ${abs(change):.2f} ({change_pct:+.2f}%)
-            </p>
+        <div class="metric-container metric-critical {'price-up' if is_positive else 'price-down'} fade-in" style="border-left-color: #3b82f6 !important;">
+            <div class="metric-label">Current Price</div>
+            <div class="metric-body">
+                <div class="metric-value value-animate">{format_number(current_price)}</div>
+                <div class="metric-change {change_class}">{change_emoji} ${abs(change):.2f} ({change_pct:+.2f}%)</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
+    # Day Range Card
     with col2:
         day_high = current_data['High'].max()
         day_low = current_data['Low'].min()
+        day_range = day_high - day_low
         st.markdown(f"""
-        <div class="metric-container">
-            <h3>Day Range</h3>
-            <p><strong>High:</strong> ${day_high:.2f}</p>
-            <p><strong>Low:</strong> ${day_low:.2f}</p>
-            <p><strong>Range:</strong> ${day_high - day_low:.2f}</p>
+        <div class="metric-container fade-in" style="border-left-color: #10b981 !important;">
+            <div class="metric-label">Day Range</div>
+            <div class="metric-body">
+                <div class="metric-value value-animate">{format_number(day_range)}</div>
+                <div style="margin-top: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.875rem;">
+                        <span class="muted-text">High:</span>
+                        <span>${day_high:.2f}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.875rem;">
+                        <span class="muted-text">Low:</span>
+                        <span>${day_low:.2f}</span>
+                    </div>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
+    # Volume Card
     with col3:
         total_volume = current_data['Volume'].sum()
         avg_volume = stock_info.info.get('averageVolume', 0)
         volume_ratio = total_volume / avg_volume if avg_volume > 0 else 0
+        volume_status = 'positive-change' if volume_ratio > 1 else 'negative-change' if volume_ratio < 1 else ''
+        
         st.markdown(f"""
-        <div class="metric-container">
-            <h3>Volume</h3>
-            <p><strong>Today:</strong> {total_volume:,}</p>
-            <p><strong>Avg:</strong> {avg_volume:,}</p>
-            <p><strong>Ratio:</strong> {volume_ratio:.2f}x</p>
+        <div class="metric-container fade-in" style="border-left-color: #8b5cf6 !important;">
+            <div class="metric-label">Volume</div>
+            <div class="metric-body">
+                <div class="metric-value value-animate">{total_volume/1e6:.2f}M</div>
+                <div class="metric-change {volume_status}">{volume_ratio:.1f}x avg volume</div>
+                <div class="muted-text" style="margin-top: 0.5rem; font-size: 0.75rem;">Avg: {avg_volume/1e6:.1f}M</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
+    # Key Metrics Card
     with col4:
         market_cap = stock_info.info.get('marketCap', 0)
         pe_ratio = stock_info.info.get('trailingPE', 'N/A')
         
-        # Format market cap safely
-        if isinstance(market_cap, (int, float)) and market_cap > 0:
-            if market_cap >= 1e12:
-                market_cap_str = f"${market_cap/1e12:.1f}T"
-            elif market_cap >= 1e9:
-                market_cap_str = f"${market_cap/1e9:.1f}B"
-            elif market_cap >= 1e6:
-                market_cap_str = f"${market_cap/1e6:.1f}M"
-            else:
-                market_cap_str = f"${market_cap:,.0f}"
-        else:
-            market_cap_str = "N/A"
-            
+        # Additional metrics
+        fifty_two_week_high = stock_info.info.get('fiftyTwoWeekHigh', 'N/A')
+        fifty_two_week_low = stock_info.info.get('fiftyTwoWeekLow', 'N/A')
+        
         st.markdown(f"""
-        <div class="metric-container">
-            <h3>Key Metrics</h3>
-            <p><strong>Market Cap:</strong> {market_cap_str}</p>
-            <p><strong>P/E:</strong> {pe_ratio}</p>
-            <p><strong>Updated:</strong> {datetime.now().strftime('%H:%M:%S')}</p>
+        <div class="metric-container fade-in" style="border-left-color: #ec4899 !important;">
+            <div class="metric-label">Key Metrics</div>
+            <div class="metric-body">
+                <div class="metric-value value-animate">{format_number(market_cap)}</div>
+                <div class="muted-text" style="font-size: 0.75rem; margin-bottom: 0.5rem;">Market Cap</div>
+                <div style="margin-top: 0.25rem;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 0.25rem;">
+                        <span>P/E Ratio:</span>
+                        <span>{pe_ratio if isinstance(pe_ratio, str) else f'{pe_ratio:.2f}'}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem;" class="muted-text">
+                        <span>52W Range:</span>
+                        <span>${fifty_two_week_low if isinstance(fifty_two_week_low, str) else f'{fifty_two_week_low:.2f}'} - ${fifty_two_week_high if isinstance(fifty_two_week_high, str) else f'{fifty_two_week_high:.2f}'}</span>
+                    </div>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+    # Updated timestamp and separator
+    st.markdown(f"<div class='muted-text' style='font-size: 0.75rem; margin-top: 0.5rem;'>Updated at {now_str}</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 1px; background: rgba(0,0,0,0.1); margin: 1rem 0;'></div>", unsafe_allow_html=True)
 
 def stock_heatmap_chart(tickers):
     data = yf.download(tickers, period="5d")['Close']
