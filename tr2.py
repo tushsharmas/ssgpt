@@ -11,9 +11,61 @@ import requests
 import plotly.io as pio
 from tr import predict_stock
 import matplotlib.pyplot as plt
+import urllib.request
 
 
+# ---------- STATIC IMPORTANT STOCKS ----------
+IMPORTANT_STOCKS = [
+    "AAPL - Apple Inc.",
+    "MSFT - Microsoft Corporation",
+    "GOOGL - Alphabet Inc. (Class A)",
+    "GOOG - Alphabet Inc. (Class C)",
+    "AMZN - Amazon.com Inc.",
+    "META - Meta Platforms Inc.",
+    "NVDA - NVIDIA Corporation",
+    "TSLA - Tesla, Inc.",
+    "BRK.B - Berkshire Hathaway Inc. (B)",
+    "UNH - UnitedHealth Group Inc.",
+    "JPM - JPMorgan Chase & Co.",
+    "JNJ - Johnson & Johnson",
+    "V - Visa Inc.",
+    "MA - Mastercard Inc.",
+    "PG - Procter & Gamble Co.",
+    "XOM - Exxon Mobil Corporation",
+    "LLY - Eli Lilly and Company",
+    "HD - Home Depot Inc.",
+    "AVGO - Broadcom Inc.",
+    "COST - Costco Wholesale Corporation",
+    "NFLX - Netflix, Inc.",
+    "DIS - The Walt Disney Company",
+    "WMT - Walmart Inc.",
+    "BAC - Bank of America Corporation",
+    "KO - The Coca-Cola Company",
+    "ADBE - Adobe Inc.",
+    "PEP - PepsiCo, Inc.",
+    "CRM - Salesforce, Inc.",
+    "INTC - Intel Corporation",
+    "MCD - McDonald's Corporation",
+]
 
+@st.cache_data
+def search_yahoo_stocks(query):
+    try:
+        if not query:
+            return IMPORTANT_STOCKS
+        url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=20&newsCount=0"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        data = requests.get(url, headers=headers).json()
+        results = [
+            f"{q['symbol']} - {q.get('shortname') or q.get('longname','')}"
+            for q in data.get("quotes", [])
+            if q.get("symbol") and (q.get("shortname") or q.get("longname"))
+        ]
+        return results or IMPORTANT_STOCKS
+    except Exception:
+        return IMPORTANT_STOCKS
+
+      
 
 # Custom Plotly templates for light/dark modes
 _light_plotly_template = go.layout.Template(
@@ -49,7 +101,7 @@ _light_css = """
         background-color: #ffffff !important;
         color: #0b1220 !important;
     }
-
+    
     /* Sidebar styling */
     [data-testid="stSidebar"] > div {
         background-color: #f7f9fb !important;
@@ -128,6 +180,15 @@ _light_css = """
         color: #0a66ff !important;
         background-color: #f1f5f9 !important;
     }
+    input::placeholder {
+        color: rgba(80, 80, 80, 0.8) !important;
+        font-style: italic !important;
+        opacity: 1 !important;
+    }
+    header, [data-testid="stHeader"], [data-testid="stToolbar"] {
+    background-color: #ffffff !important;
+}
+
     </style>
 """
 
@@ -216,6 +277,10 @@ _dark_css = """
         color: #7fb4ff !important;
         background-color: #2d303e !important;
     }
+    header, [data-testid="stHeader"], [data-testid="stToolbar"] {
+    background-color: #0e1117 !important;
+}
+
     </style>
 """
 
@@ -253,35 +318,9 @@ def fetch_ticker_suggestions(query, max_results=5):
     except Exception:
         return []
 
-def ticker_autocomplete_input(label, key, default="AAPL", help=None):
-    """
-    Render an autocomplete search bar for ticker/company name selection.
-    Returns the selected ticker symbol (str).
-    """
-    # Show input and suggestions below
-    query = st.text_input(label, value=default, key=key, help=help, max_chars=30)
-    suggestions = fetch_ticker_suggestions(query.strip())
-    selection = None
 
-    if suggestions and len(query.strip()) >= 2:
-        options = []
-        for symbol, name, exch in suggestions:
-            display = f"{symbol} - {name} ({exch})" if name else f"{symbol} ({exch})"
-            options.append(display)
-        # Use radio for keyboard/mouse selection
-        st.markdown('<div style="margin-bottom: 0.5em;"></div>', unsafe_allow_html=True)
-        picked = st.radio(
-            "Select a stock:",
-            options,
-            key=f"{key}_radio",
-            index=0 if options else -1,
-            horizontal=False,
-        )
-        if picked:
-            selection = picked.split(" - ")[0].split(" ")[0]  # Extract symbol
-    else:
-        selection = query.strip()
-    return selection.upper().strip()
+
+
 
 # ==========================
 # Portfolio Tracker (Watchlist) Feature
@@ -796,13 +835,17 @@ def main():
             st.markdown(_light_css, unsafe_allow_html=True)
             pio.templates.default = "custom_light"
 
-        # Stock ticker autocomplete input
-        ticker = ticker_autocomplete_input(
-            "🔍 Search Stock (Name or Ticker)", 
-            key="autocomplete", 
-            default=st.session_state.get("selected_ticker", "AAPL"), 
-            help="Start typing a company name or ticker symbol (e.g., Apple, Microsoft, TSLA)"
-        )
+       # ---------- MAIN DROPDOWN LOGIC ----------
+        st.write("### Select or search for a stock")
+
+        query = st.text_input(
+            "Type a company or symbol", value="", placeholder="Zoom, PayPal, NIO, etc."
+        ).strip()
+
+        options = search_yahoo_stocks(query)
+        selected = st.selectbox("Or select from dropdown", options, index=0)
+        ticker = selected.split(" - ")[0].strip()
+
 
         # Validate ticker format
         if ticker and not ticker.replace('-', '').replace('.', '').isalnum():
@@ -960,11 +1003,17 @@ def main():
             st.error(f"An error occurred: {str(e)}")
             st.info("Please check the ticker symbol and try again.")
     
+            selected_tickers = st.multiselect(
+                "Select stocks to include in heatmap",
+                options=default_tickers,
+                default=default_tickers
+            )
             if selected_tickers:
                 heatmap_fig = stock_heatmap_chart(selected_tickers)
                 st.plotly_chart(heatmap_fig, use_container_width=True)
             else:
                 st.info("Please select at least one stock to display the heatmap.")
+
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         st.info("Please check the ticker symbol and try again.")
@@ -1111,4 +1160,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
