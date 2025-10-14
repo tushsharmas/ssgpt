@@ -1003,11 +1003,17 @@ def main():
             st.error(f"An error occurred: {str(e)}")
             st.info("Please check the ticker symbol and try again.")
     
+            selected_tickers = st.multiselect(
+                "Select stocks to include in heatmap",
+                options=default_tickers,
+                default=default_tickers
+            )
             if selected_tickers:
                 heatmap_fig = stock_heatmap_chart(selected_tickers)
                 st.plotly_chart(heatmap_fig, use_container_width=True)
             else:
                 st.info("Please select at least one stock to display the heatmap.")
+
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         st.info("Please check the ticker symbol and try again.")
@@ -1154,4 +1160,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
