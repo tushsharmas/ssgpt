@@ -13,6 +13,39 @@ from tr import predict_stock
 import matplotlib.pyplot as plt
 
 
+IMPORTANT_STOCKS = [
+    "AAPL - Apple Inc.",
+    "MSFT - Microsoft Corporation",
+    "GOOGL - Alphabet Inc. (Class A)",
+    "GOOG - Alphabet Inc. (Class C)",
+    "AMZN - Amazon.com Inc.",
+    "META - Meta Platforms Inc.",
+    "NVDA - NVIDIA Corporation",
+    "TSLA - Tesla, Inc.",
+    "BRK.B - Berkshire Hathaway Inc. (B)",
+    "UNH - UnitedHealth Group Inc.",
+    "JPM - JPMorgan Chase & Co.",
+    "JNJ - Johnson & Johnson",
+    "V - Visa Inc.",
+    "MA - Mastercard Inc.",
+    "PG - Procter & Gamble Co.",
+    "XOM - Exxon Mobil Corporation",
+    "LLY - Eli Lilly and Company",
+    "HD - Home Depot Inc.",
+    "AVGO - Broadcom Inc.",
+    "COST - Costco Wholesale Corporation",
+    "NFLX - Netflix, Inc.",
+    "DIS - The Walt Disney Company",
+    "WMT - Walmart Inc.",
+    "BAC - Bank of America Corporation",
+    "KO - The Coca-Cola Company",
+    "ADBE - Adobe Inc.",
+    "PEP - PepsiCo, Inc.",
+    "CRM - Salesforce, Inc.",
+    "INTC - Intel Corporation",
+    "MCD - McDonald's Corporation",
+]
+
 
 
 # Custom Plotly templates for light/dark modes
@@ -230,7 +263,7 @@ def fetch_ticker_suggestions(query, max_results=5):
     Returns a list of tuples: (symbol, name, exchange)
     """
     if not query or len(query) < 2:
-        return []  # Don't spam API for short queries
+        return []  
 
     url = (
         f"https://query2.finance.yahoo.com/v1/finance/search"
@@ -761,234 +794,123 @@ def stock_heatmap_chart(tickers):
     )
     fig.update_layout(title="Stock Market Heatmap")
     return fig
-def main():
-    st.title("🚀 Advanced Real-Time Stock Analyzer")
-    st.markdown("*Professional-grade stock analysis with real-time updates and advanced technical indicators*")
-
-    if "active_tab" not in st.session_state:
-        st.session_state.active_tab = 0
-    if "dark_mode" not in st.session_state:
-        st.session_state.dark_mode = False
-       
-    # --- Portfolio Tracker Sidebar ---
-    def set_selected_ticker(ticker):
-        st.session_state["selected_ticker"] = ticker
-
-    display_watchlist(selected_ticker_callback=set_selected_ticker)
-
-    # Sidebar configuration
-    with st.sidebar:
-        st.header("⚙️ Configuration")
-        
-        # Initialize dark_mode in session_state if it doesn't exist
-        if "dark_mode" not in st.session_state:
-            st.session_state.dark_mode = False
-        dark_mode = st.checkbox("🌙 Dark mode", 
-                              key="dark_mode", 
-                              value=st.session_state.get("dark_mode", False),
-                              help="Toggle UI dark theme")
-        
-        # Apply theme CSS and Plotly template based on dark_mode
-        if dark_mode:
-            st.markdown(_dark_css, unsafe_allow_html=True)
-            pio.templates.default = "custom_dark"
-        else:
-            st.markdown(_light_css, unsafe_allow_html=True)
-            pio.templates.default = "custom_light"
-
-        # Stock ticker autocomplete input
-        ticker = ticker_autocomplete_input(
-            "🔍 Search Stock (Name or Ticker)", 
-            key="autocomplete", 
-            default=st.session_state.get("selected_ticker", "AAPL"), 
-            help="Start typing a company name or ticker symbol (e.g., Apple, Microsoft, TSLA)"
-        )
-
-        # Validate ticker format
-        if ticker and not ticker.replace('-', '').replace('.', '').isalnum():
-            st.warning("⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)")
-            ticker = ""
-        
-        # Watchlist add button
-        if ticker and st.button("⭐ Add to Watchlist", key="add_watchlist"):
-            add_to_watchlist(ticker)
-            st.success(f"{ticker} added to watchlist!")
-
-        # Time period selection
-        period_options = {
-            "1 Day": "1d",
-            "5 Days": "5d", 
-            "1 Month": "1mo",
-            "3 Months": "3mo",
-            "6 Months": "6mo",
-            "1 Year": "1y",
-            "2 Years": "2y"
-        }
-        selected_period = st.selectbox("📅 Time Period", list(period_options.keys()), index=6)
-        period = period_options[selected_period]
-        
-        # Auto-refresh toggle
-        auto_refresh = st.checkbox("🔄 Auto Refresh (30s)", value=False)
-        
-        # Refresh button
-        if st.button("🔄 Refresh Now"):
-            st.cache_data.clear()
-            st.cache_resource.clear()
-
-    # If ticker in session_state due to sidebar selection, override
-    if "selected_ticker" in st.session_state and st.session_state["selected_ticker"]:
-        ticker = st.session_state.pop("selected_ticker")
-
-    if not ticker:
-        st.warning("Please enter a stock ticker symbol")
+def render_full_stock_dashboard(ticker, period):
+    stock = get_stock_info(ticker)
+    if not stock:
+        st.error(f"Failed to load data for {ticker}")
         return
     
-    # Auto-refresh implementation using session state
-    if auto_refresh:
-        if 'last_refresh' not in st.session_state:
-            st.session_state.last_refresh = time.time()
-        
-        current_time = time.time()
-        if current_time - st.session_state.last_refresh >= 30:
-            st.session_state.last_refresh = current_time
-            st.cache_data.clear()
-            st.rerun()
-    
-    try:
-        # Get stock information
-        with st.spinner(f"📈 Loading data for {ticker}..."):
-            stock = get_stock_info(ticker)
-            if not stock:
-                return
-                
-            # Get historical data
-            historical_data = stock.history(period=period)
-            if historical_data.empty:
-                st.error("No data available for this ticker")
-                return
-                
-            # Calculate technical indicators
-            historical_data = calculate_technical_indicators(historical_data)
-                
-            # Get real-time intraday data
-            real_time_data = get_real_time_data(ticker)
-            
-        # Company header
-        company_name = stock.info.get('longName', ticker)
-        sector = stock.info.get('sector', 'N/A')
-        st.subheader(f"📈 {company_name} ({ticker})")
-        st.caption(f"Sector: {sector}")
-             
-        # Real-time metrics
-        st.header("📊 Real-Time Overview")
-        if not real_time_data.empty:
-            display_real_time_metrics(stock, real_time_data)
-        else:
-            st.warning("Real-time data not available, showing latest market data")
-            display_real_time_metrics(stock, historical_data.tail(1))
-            
-        # Main charts section
-        st.header("📈 Advanced Charts")
-            
-        tab_names = [
-            "📊 Price & Volume", 
-            "🔬 Technical Indicators", 
-            "📦 Volume Analysis",
-            "📋 Financial Overview",
-            "🌡️ Market Heatmap"
-        ]
-        chart_tabs = st.tabs(tab_names)
-            
-        try:
-            with chart_tabs[0]:
-                st.subheader("Price Action & Volume")
-                if not real_time_data.empty:
-                    intraday_chart = create_advanced_candlestick_chart(
-                        real_time_data, f"{ticker} - Intraday (1-minute intervals)"
-                    )
-                    st.plotly_chart(intraday_chart, use_container_width=True)
-                historical_chart = create_advanced_candlestick_chart(
-                    historical_data, f"{ticker} - Historical ({selected_period})"
-                )
-                st.plotly_chart(historical_chart, use_container_width=True)
-                    
-            with chart_tabs[1]:
-                st.subheader("Technical Indicators Dashboard")
-                tech_chart = create_technical_indicators_chart(historical_data)
-                st.plotly_chart(tech_chart, use_container_width=True)
-                    
-                # Technical analysis summary
-                if 'RSI' in historical_data.columns and not historical_data['RSI'].empty:
-                    latest_rsi = historical_data['RSI'].iloc[-1]
-                    latest_macd = historical_data['MACD'].iloc[-1]
-                    latest_signal = historical_data['MACD_Signal'].iloc[-1]
-                        
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        if not pd.isna(latest_rsi):
-                            rsi_signal = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
-                            st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
-                        else:
-                            st.metric("RSI (14)", "N/A", "Insufficient data")
-                        
-                    with col2:
-                        if not pd.isna(latest_macd) and not pd.isna(latest_signal):
-                            macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
-                            st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
-                        else:
-                            st.metric("MACD Signal", "N/A", "Insufficient data")
-                        
-                    with col3:
-                        if 'ATR' in historical_data.columns and not historical_data['ATR'].empty:
-                            latest_atr = historical_data['ATR'].iloc[-1]
-                            if not pd.isna(latest_atr):
-                                st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
-                            else:
-                                st.metric("ATR (14)", "N/A", "Insufficient data")
-                
-            with chart_tabs[2]:
-                st.subheader("Volume Analysis")
-                volume_chart = create_volume_analysis_chart(historical_data)
-                st.plotly_chart(volume_chart, use_container_width=True)
-            
-            with chart_tabs[3]:
-                st.subheader("Financial Overview")
-                    
-                # Key financial metrics
-                info = stock.info
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
-            st.info("Please check the ticker symbol and try again.")
-    
-            if selected_tickers:
-                heatmap_fig = stock_heatmap_chart(selected_tickers)
-                st.plotly_chart(heatmap_fig, use_container_width=True)
-            else:
-                st.info("Please select at least one stock to display the heatmap.")
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-        st.info("Please check the ticker symbol and try again.")
-                
-        col1, col2, col3, col4 = st.columns(4)
-        metrics = [
-            ("Market Cap", info.get('marketCap', 0), "B", 1e9),
-            ("Revenue", info.get('totalRevenue', 0), "B", 1e9),
-            ("P/E Ratio", info.get('trailingPE', 0), "", 1),
-            ("Dividend Yield", info.get('dividendYield', 0), "%", 100),
-            ("ROE", info.get('returnOnEquity', 0), "%", 100),
-            ("Profit Margin", info.get('profitMargins', 0), "%", 100),
-            ("Debt/Equity", info.get('debtToEquity', 0), "", 1),
-            ("Beta", info.get('beta', 0), "", 1)
-        ]
+    historical_data = stock.history(period=period)
+    if historical_data.empty:
+        st.error("No data available for this ticker")
+        return
 
-        for i, (label, value, suffix, divisor) in enumerate(metrics):
-            col = [col1, col2, col3, col4][i % 4]
-            with col:
-                if isinstance(value, (int, float)) and value != 0:
-                    formatted_value = f"{value/divisor:.2f}{suffix}" if divisor > 1 else f"{value:.2f}{suffix}"
-                else:
-                    formatted_value = "N/A"
-                st.metric(label, formatted_value)
+    historical_data = calculate_technical_indicators(historical_data)
+    real_time_data = get_real_time_data(ticker)
+
+    company_name = stock.info.get('longName', ticker)
+    sector = stock.info.get('sector', 'N/A')
+
+    st.subheader(f"📈 {company_name} ({ticker})")
+    st.caption(f"Sector: {sector}")
+
+    st.header("📊 Real-Time Overview")
+    if not real_time_data.empty:
+        display_real_time_metrics(stock, real_time_data)
+    else:
+        st.warning("Real-time data not available, showing latest market data")
+        display_real_time_metrics(stock, historical_data.tail(1))
+
+    # Main charts
+    st.header("📈 Advanced Charts")
+    tab_names = [
+        "📊 Price & Volume",
+        "🔬 Technical Indicators",
+        "📦 Volume Analysis",
+        "📋 Financial Overview",
+        "🌡️ Market Heatmap"
+    ]
+    chart_tabs = st.tabs(tab_names)
+
+    try:
+        with chart_tabs[0]:
+            st.subheader("Price Action & Volume")
+            if not real_time_data.empty:
+                intraday_chart = create_advanced_candlestick_chart(
+                    real_time_data, f"{ticker} - Intraday (1-minute intervals)"
+                )
+                st.plotly_chart(intraday_chart, use_container_width=True, key=f"chart_{ticker}_intraday")
+            historical_chart = create_advanced_candlestick_chart(
+                historical_data, f"{ticker} - Historical ({period})"
+            )
+            st.plotly_chart(historical_chart, use_container_width=True, key=f"chart_{ticker}_historical")
+
+
+        with chart_tabs[1]:
+            st.subheader("Technical Indicators Dashboard")
+            tech_chart = create_technical_indicators_chart(historical_data)
+            st.plotly_chart(tech_chart, use_container_width=True, key=f"chart_{ticker}_tech")
+
+            # Technical analysis summary
+            if 'RSI' in historical_data.columns and not historical_data['RSI'].empty:
+                latest_rsi = historical_data['RSI'].iloc[-1]
+                latest_macd = historical_data['MACD'].iloc[-1]
+                latest_signal = historical_data['MACD_Signal'].iloc[-1]
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if not pd.isna(latest_rsi):
+                        rsi_signal = "Overbought" if latest_rsi > 70 else "Oversold" if latest_rsi < 30 else "Neutral"
+                        st.metric("RSI (14)", f"{latest_rsi:.1f}", rsi_signal)
+                    else:
+                        st.metric("RSI (14)", "N/A", "Insufficient data")
+
+                with col2:
+                    if not pd.isna(latest_macd) and not pd.isna(latest_signal):
+                        macd_signal = "Bullish" if latest_macd > latest_signal else "Bearish"
+                        st.metric("MACD Signal", macd_signal, f"{latest_macd - latest_signal:.4f}")
+                    else:
+                        st.metric("MACD Signal", "N/A", "Insufficient data")
+
+                with col3:
+                    if 'ATR' in historical_data.columns and not historical_data['ATR'].empty:
+                        latest_atr = historical_data['ATR'].iloc[-1]
+                        if not pd.isna(latest_atr):
+                            st.metric("ATR (14)", f"${latest_atr:.2f}", "Volatility")
+                        else:
+                            st.metric("ATR (14)", "N/A", "Insufficient data")
+
+        with chart_tabs[2]:
+            st.subheader("Volume Analysis")
+            volume_chart = create_volume_analysis_chart(historical_data)
+            st.plotly_chart(volume_chart, use_container_width=True, key=f"chart_{ticker}_volume")
+
+        with chart_tabs[3]:
+            st.subheader("Financial Overview")
+
+            # Key financial metrics
+            info = stock.info
+
+            col1, col2, col3, col4 = st.columns(4)
+            metrics = [
+                ("Market Cap", info.get('marketCap', 0), "B", 1e9),
+                ("Revenue", info.get('totalRevenue', 0), "B", 1e9),
+                ("P/E Ratio", info.get('trailingPE', 0), "", 1),
+                ("Dividend Yield", info.get('dividendYield', 0), "%", 100),
+                ("ROE", info.get('returnOnEquity', 0), "%", 100),
+                ("Profit Margin", info.get('profitMargins', 0), "%", 100),
+                ("Debt/Equity", info.get('debtToEquity', 0), "", 1),
+                ("Beta", info.get('beta', 0), "", 1)
+            ]
+
+            for i, (label, value, suffix, divisor) in enumerate(metrics):
+                col = [col1, col2, col3, col4][i % 4]
+                with col:
+                    if isinstance(value, (int, float)) and value != 0:
+                        formatted_value = f"{value/divisor:.2f}{suffix}" if divisor > 1 else f"{value:.2f}{suffix}"
+                    else:
+                        formatted_value = "N/A"
+                    st.metric(label, formatted_value)
 
         with chart_tabs[4]:  # Market Heatmap tab
             st.subheader("Stock Market Heatmap")
@@ -1000,19 +922,21 @@ def main():
             selected_tickers = st.multiselect(
                 "Select stocks to include in heatmap",
                 options=default_tickers,
-                default=default_tickers
-            )
-            
+                default=default_tickers,
+                key=f"multiselect_heatmap_{ticker}"
+)
+
+
+            if selected_tickers:
+                heatmap_fig = stock_heatmap_chart(selected_tickers)
+                st.plotly_chart(heatmap_fig, use_container_width=True, key=f"heatmap_{ticker}")
+            else:
+                st.info("Please select at least one stock to display the heatmap.")
+
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         st.info("Please check the ticker symbol and try again.")
 
-        if selected_tickers:
-            heatmap_fig = stock_heatmap_chart(selected_tickers)
-            st.plotly_chart(heatmap_fig, use_container_width=True)
-        else:
-            st.info("Please select at least one stock to display the heatmap.")
-        
     # Additional information sections
     if st.expander("📰 Recent News", expanded=False):
         news = stock.news
@@ -1022,7 +946,7 @@ def main():
                 title = item.get('title', '').strip()
                 if title and title != 'No title' and valid_news_count < 5:
                     st.markdown(f"**{title}**")
-                        
+
                     if 'providerPublishTime' in item:
                         try:
                             publish_time = datetime.fromtimestamp(item['providerPublishTime'])
@@ -1033,48 +957,46 @@ def main():
                         
                     if 'link' in item and item['link']:
                         st.markdown(f"[Read more]({item['link']})")
-                        
+
                     st.divider()
                     valid_news_count += 1
-                
+
             if valid_news_count == 0:
                 st.info("No recent news with valid titles available")
         else:
             st.info("No recent news available")
-        
+
     if st.expander("🏢 Company Information", expanded=False):
         st.write(info.get('longBusinessSummary', 'No company information available.'))
-            
+
         col1, col2 = st.columns(2)
         with col1:
             st.write(f"**Industry:** {info.get('industry', 'N/A')}")
             st.write(f"**Employees:** {info.get('fullTimeEmployees', 'N/A'):,}")
             st.write(f"**Founded:** {info.get('startDate', 'N/A')}")
-            
+
         with col2:
             st.write(f"**Website:** {info.get('website', 'N/A')}")
             st.write(f"**Country:** {info.get('country', 'N/A')}")
             st.write(f"**Currency:** {info.get('currency', 'N/A')}")
-               
-    # -------------------------------   
-    # Stock Price Prediction
-    # ----------------------------
 
+    # Stock Price Prediction
     st.header("🔮 Future Stock Price Prediction")
 
-    days = st.number_input("Days to predict:", min_value=1, max_value=30, value=5, key="days_input")
-    predict_button = st.button("Predict Closing Prices", key="predict_button")
+    days = st.number_input("Days to predict:", min_value=1, max_value=30, value=5, key=f"days_input_{ticker}")
+    predict_button = st.button("Predict Closing Prices", key=f"predict_button_{ticker}")
+
 
     if predict_button:
         with st.spinner("Predicting..."):
             try:
-                ticker_symbol = st.session_state.get("autocomplete", "").strip()
+                ticker_symbol = ticker  # Use the current dashboard ticker directly
 
                 if not ticker_symbol:
                     st.warning("Please enter a valid stock ticker symbol first.")
                 else:
-                    stock = yf.Ticker(ticker_symbol)
-                    data = stock.history(period="1y")
+                    stock_obj = yf.Ticker(ticker_symbol)
+                    data = stock_obj.history(period="1y")
 
                     if data.empty:
                         st.error(f"Not enough historical data for '{ticker_symbol}' to make a prediction.")
@@ -1082,23 +1004,7 @@ def main():
                         data.reset_index(inplace=True)
                         preds = predict_stock(data, days=days)
 
-                        st.subheader(f"Predicted Closing Prices for {ticker_symbol.upper()}")
-                        st.dataframe(preds)
-                        st.subheader("Prediction Chart")
-                        fig2, ax = plt.subplots(figsize=(10, 5))
-                        plot_data= data
-                    # Plot historical data
-                        ax.plot(plot_data.index, plot_data['Close'], label='Actual Close')
-
-                    # Plot predicted data
-                        ax.plot(preds['Date'], preds['Predicted_Close'], label='Predicted Close', linestyle='--')
-                    
-                        ax.set_xlabel("Date")
-                        ax.set_ylabel("Price")
-                        ax.set_title(f"{ticker_symbol} Stock Price Prediction")
-                        ax.legend()
-                        st.pyplot(fig2)
-                    # --- END OF PLOTTING CODE ---
+                        st.session_state[f"preds_{ticker}"] = preds  
             except Exception as e:
                 st.error(f"Prediction failed. Error: {e}")
 
@@ -1107,8 +1013,155 @@ def main():
                     st.info("• Make sure the ticker symbol is correct (e.g., AAPL, GOOGL, TSLA)")
                     st.info("• Some stocks may not have real-time data available")
                     st.info("• Try a major stock exchange symbol")
-      
+    if f"preds_{ticker}" in st.session_state:
+        ticker_symbol = ticker
+        stock_obj = yf.Ticker(ticker_symbol)
+        preds = st.session_state[f"preds_{ticker}"]
+        st.subheader(f"Predicted Closing Prices for {ticker.upper()}")
+        st.dataframe(preds)
+        st.subheader("Prediction Chart")
+        fig2, ax = plt.subplots(figsize=(10, 5))
+        plot_data = stock_obj.history(period="1y")
+        ax.plot(plot_data.index, plot_data['Close'], label='Actual Close')
+        ax.plot(preds['Date'], preds['Predicted_Close'], label='Predicted Close', linestyle='--')
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Price")
+        ax.set_title(f"{ticker_symbol} Stock Price Prediction")
+        ax.legend()
+        st.pyplot(fig2)
+
+def safe_rerun():
+    try:
+        st.experimental_rerun()
+    except AttributeError:
+        
+        st.session_state.show_multi_stock = False
+        st.session_state.rerun_trigger = True
+
+def main():
+    st.title("🚀 Advanced Real-Time Stock Analyzer")
+    st.markdown("*Professional-grade stock analysis with real-time updates and advanced technical indicators*")
+
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = 0
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
+
+    def set_selected_ticker(ticker):
+        st.session_state["selected_ticker"] = ticker
+
+    display_watchlist(selected_ticker_callback=set_selected_ticker)
+
+    with st.sidebar:
+        st.header("⚙️ Configuration")
+        if "dark_mode" not in st.session_state:
+            st.session_state.dark_mode = False
+        dark_mode = st.checkbox(
+            "🌙 Dark mode",
+            key="dark_mode",
+            value=st.session_state.get("dark_mode", False),
+            help="Toggle UI dark theme",
+        )
+        if dark_mode:
+            st.markdown(_dark_css, unsafe_allow_html=True)
+            pio.templates.default = "custom_dark"
+        else:
+            st.markdown(_light_css, unsafe_allow_html=True)
+            pio.templates.default = "custom_light"
+
+        ticker = ticker_autocomplete_input(
+            "🔍 Search Stock (Name or Ticker)",
+            key="autocomplete",
+            default=st.session_state.get("selected_ticker", "AAPL"),
+            help="Start typing a company name or ticker symbol (e.g., Apple, Microsoft, TSLA)",
+        )
+
+        if ticker and not ticker.replace("-", "").replace(".", "").isalnum():
+            st.warning(
+                "⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)"
+            )
+            ticker = ""
+
+        if ticker and st.button("⭐ Add to Watchlist", key="add_watchlist"):
+            add_to_watchlist(ticker)
+            st.success(f"{ticker} added to watchlist!")
+
+        period_options = {
+            "1 Day": "1d",
+            "5 Days": "5d",
+            "1 Month": "1mo",
+            "3 Months": "3mo",
+            "6 Months": "6mo",
+            "1 Year": "1y",
+            "2 Years": "2y",
+        }
+        selected_period = st.selectbox("📅 Time Period", list(period_options.keys()), index=6)
+        period = period_options[selected_period]
+
+        if "show_multi_stock" not in st.session_state:
+            st.session_state.show_multi_stock = False
+
+        if st.button("Multi-Stock Comparison"):
+            st.session_state.show_multi_stock = not st.session_state.show_multi_stock
+
+        stock1 = stock2 = None  # Always define at the top of sidebar/mode logic
+
+        if st.session_state.show_multi_stock:
+            col1, col2 = st.columns(2)
+            aapl_index = next(i for i, v in enumerate(IMPORTANT_STOCKS) if v.startswith("AAPL"))
+            msft_index = next(i for i, v in enumerate(IMPORTANT_STOCKS) if v.startswith("MSFT"))
+            with col1:
+                stock1_label = st.selectbox("Stock 1", options=IMPORTANT_STOCKS, index=aapl_index, key="stock1_select")
+            with col2:
+                stock2_label = st.selectbox("Stock 2", options=IMPORTANT_STOCKS, index=msft_index, key="stock2_select")
+
+            cols = st.columns([6, 1])
+            with cols[1]:
+                if st.button("❌", key="exit_multistock", help="Exit Multi-Stock Comparison"):
+                    st.session_state.show_multi_stock = False
+                    safe_rerun()
+            stock1 = stock1_label.split(" - ")[0]
+            stock2 = stock2_label.split(" - ")[0]
+
+
+
+        auto_refresh = st.checkbox("🔄 Auto Refresh (30s)", value=False)
+
+        if st.button("🔄 Refresh Now"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+
+    if "selected_ticker" in st.session_state and st.session_state["selected_ticker"]:
+        ticker = st.session_state.pop("selected_ticker")
+
+    if not ticker:
+        st.warning("Please enter a stock ticker symbol")
+        return
+
+    if auto_refresh:
+        if "last_refresh" not in st.session_state:
+            st.session_state.last_refresh = time.time()
+
+        current_time = time.time()
+        if current_time - st.session_state.last_refresh >= 30:
+            st.session_state.last_refresh = current_time
+            st.cache_data.clear()
+            st.rerun()
+
+    if st.session_state.get("show_multi_stock") and stock1 and stock2:
+        col1, col2 = st.columns(2)
+        with col1:
+            render_full_stock_dashboard(stock1, period)
+        with col2:
+            render_full_stock_dashboard(stock2, period)
+        return
+    else:
+        render_full_stock_dashboard(ticker, period)
+
+
 
 if __name__ == "__main__":
     main()
+
+      
 
