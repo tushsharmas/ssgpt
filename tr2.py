@@ -1069,22 +1069,26 @@ def main():
             st.markdown(_light_css, unsafe_allow_html=True)
             pio.templates.default = "custom_light"
 
-        ticker = ticker_autocomplete_input(
-            "🔍 Search Stock (Name or Ticker)",
-            key="autocomplete",
-            default=st.session_state.get("selected_ticker", "AAPL"),
-            help="Start typing a company name or ticker symbol (e.g., Apple, Microsoft, TSLA)",
+        # Dropdown with all important stocks
+        stock_labels = IMPORTANT_STOCKS  # Already formatted like "AAPL - Apple Inc."
+        default_index = next((i for i, s in enumerate(stock_labels) if s.startswith(st.session_state.get("selected_ticker", "AAPL"))), 0)
+
+        selected_label = st.selectbox(
+            "🔍 Select a Stock",
+            options=stock_labels,
+            index=default_index,
+            key="important_stocks_dropdown",
+            help="Select a stock from the list of important stocks"
         )
 
-        if ticker and not ticker.replace("-", "").replace(".", "").isalnum():
-            st.warning(
-                "⚠️ Please enter a valid ticker symbol (letters, numbers, hyphens, and dots only)"
-            )
-            ticker = ""
+        # Extract the ticker symbol
+        ticker = selected_label.split(" - ")[0]
 
-        if ticker and st.button("⭐ Add to Watchlist", key="add_watchlist"):
+        # Add to watchlist button
+        if st.button("⭐ Add to Watchlist", key="add_watchlist"):
             add_to_watchlist(ticker)
             st.success(f"{ticker} added to watchlist!")
+
 
         period_options = {
             "1 Day": "1d",
